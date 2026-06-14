@@ -22,17 +22,17 @@ This project is not affiliated with, endorsed by, or maintained by Parallel Web 
 npm install -g parallel-search-cli@alpha
 ```
 
-With mise, use the npm backend. Because this alpha is new, bypass the default minimum release age:
+With mise, use the npm backend:
 
 ```bash
-mise use --minimum-release-age 0d npm:parallel-search-cli@0.0.1-alpha.1
+mise use npm:parallel-search-cli@0.0.1-alpha.1
 parallel-search --version
 ```
 
 For a one-off run:
 
 ```bash
-MISE_MINIMUM_RELEASE_AGE=0d mise x npm:parallel-search-cli@0.0.1-alpha.1 -- parallel-search --help
+mise x npm:parallel-search-cli@0.0.1-alpha.1 -- parallel-search --help
 ```
 
 ## Authentication
