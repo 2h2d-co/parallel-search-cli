@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tgz
+.DS_Store
+.env
+coverage/
+
+# Local agent/project notes
+DESIRES.md
+LEARNINGS.md
+MISTAKES.md
+
+# Local source/reference material
+search_*.md
+extract_*.md
+parallel-search-api.md
