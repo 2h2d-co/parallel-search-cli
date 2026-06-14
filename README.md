@@ -22,19 +22,6 @@ This project is not affiliated with, endorsed by, or maintained by Parallel Web 
 npm install -g parallel-search-cli@alpha
 ```
 
-With mise, use the npm backend:
-
-```bash
-mise use npm:parallel-search-cli@0.0.1-alpha.1
-parallel-search --version
-```
-
-For a one-off run:
-
-```bash
-mise x npm:parallel-search-cli@0.0.1-alpha.1 -- parallel-search --help
-```
-
 ## Authentication
 
 ```bash
