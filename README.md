@@ -122,14 +122,7 @@ npm run build
 mise run pack:dry
 ```
 
-Publishing tasks dry-run by default. Pass `--execute` to publish for real:
-
-```bash
-mise run publish:alpha
-mise run publish:alpha --execute
-mise run publish:beta
-mise run publish:prod
-```
+Stable and prerelease `v<version>` tags trigger the shared CI release flow. CI validates, tests, builds, previews, and stages the package on npm with provenance. Stable versions use `latest`; prereleases derive their npm dist-tag from the first prerelease identifier.
 
 The project uses `oxfmt`, `oxlint`, TypeScript 6 with `erasableSyntaxOnly`, and publishes compiled JavaScript without install/postinstall scripts.
 
