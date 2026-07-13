@@ -149,7 +149,7 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         state.bodyBase = parseJsonObject(readValue(), flag.name);
         break;
       case "--objective":
-        state.generated.objective = readValue();
+        state.generated["objective"] = readValue();
         break;
       case "-q":
       case "--query":
@@ -159,7 +159,7 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         break;
       case "--mode":
         ensureEndpoint(state.endpoint, "search", flag.name);
-        state.generated.mode = parseAllowed(readValue(), flag.name, SEARCH_MODES);
+        state.generated["mode"] = parseAllowed(readValue(), flag.name, SEARCH_MODES);
         break;
       case "--include-domain":
       case "--include-domains":
@@ -173,25 +173,25 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         break;
       case "--source-policy":
         ensureEndpoint(state.endpoint, "search", flag.name);
-        state.advancedSettings.source_policy = mergeObjects(
-          getRecord(state.advancedSettings.source_policy),
+        state.advancedSettings["source_policy"] = mergeObjects(
+          getRecord(state.advancedSettings["source_policy"]),
           parseJsonObject(readValue(), flag.name),
         );
         break;
       case "--after-date":
         ensureEndpoint(state.endpoint, "search", flag.name);
-        state.advancedSettings.source_policy = mergeObjects(
-          getRecord(state.advancedSettings.source_policy),
+        state.advancedSettings["source_policy"] = mergeObjects(
+          getRecord(state.advancedSettings["source_policy"]),
           { after_date: readValue() },
         );
         break;
       case "--location":
         ensureEndpoint(state.endpoint, "search", flag.name);
-        state.advancedSettings.location = readValue().toLowerCase();
+        state.advancedSettings["location"] = readValue().toLowerCase();
         break;
       case "--max-results":
         ensureEndpoint(state.endpoint, "search", flag.name);
-        state.advancedSettings.max_results = parseInteger(readValue(), flag.name, { min: 1 });
+        state.advancedSettings["max_results"] = parseInteger(readValue(), flag.name, { min: 1 });
         break;
       case "--url":
       case "--urls":
@@ -200,35 +200,35 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         break;
       case "--full-content":
         ensureEndpoint(state.endpoint, "extract", flag.name);
-        state.advancedSettings.full_content = true;
+        state.advancedSettings["full_content"] = true;
         break;
       case "--no-full-content":
         ensureEndpoint(state.endpoint, "extract", flag.name);
-        state.advancedSettings.full_content = false;
+        state.advancedSettings["full_content"] = false;
         break;
       case "--full-content-settings":
         ensureEndpoint(state.endpoint, "extract", flag.name);
-        state.advancedSettings.full_content = mergeObjects(
-          getRecord(state.advancedSettings.full_content),
+        state.advancedSettings["full_content"] = mergeObjects(
+          getRecord(state.advancedSettings["full_content"]),
           parseJsonObject(readValue(), flag.name),
         );
         break;
       case "--full-content-max-chars":
       case "--full-content-max-chars-per-result":
         ensureEndpoint(state.endpoint, "extract", flag.name);
-        state.advancedSettings.full_content = mergeObjects(
-          getRecord(state.advancedSettings.full_content),
+        state.advancedSettings["full_content"] = mergeObjects(
+          getRecord(state.advancedSettings["full_content"]),
           { max_chars_per_result: parseInteger(readValue(), flag.name, { min: 1 }) },
         );
         break;
       case "--max-chars-total":
-        state.generated.max_chars_total = parseInteger(readValue(), flag.name, { min: 1 });
+        state.generated["max_chars_total"] = parseInteger(readValue(), flag.name, { min: 1 });
         break;
       case "--client-model":
-        state.generated.client_model = readValue();
+        state.generated["client_model"] = readValue();
         break;
       case "--session-id":
-        state.generated.session_id = readValue();
+        state.generated["session_id"] = readValue();
         break;
       case "--advanced-settings":
         state.advancedSettings = mergeObjects(
@@ -237,46 +237,46 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         );
         break;
       case "--fetch-policy":
-        state.advancedSettings.fetch_policy = mergeObjects(
-          getRecord(state.advancedSettings.fetch_policy),
+        state.advancedSettings["fetch_policy"] = mergeObjects(
+          getRecord(state.advancedSettings["fetch_policy"]),
           parseJsonObject(readValue(), flag.name),
         );
         break;
       case "--max-age-seconds":
-        state.advancedSettings.fetch_policy = mergeObjects(
-          getRecord(state.advancedSettings.fetch_policy),
+        state.advancedSettings["fetch_policy"] = mergeObjects(
+          getRecord(state.advancedSettings["fetch_policy"]),
           { max_age_seconds: parseInteger(readValue(), flag.name, { min: 600 }) },
         );
         break;
       case "--timeout-seconds":
       case "--fetch-timeout-seconds":
-        state.advancedSettings.fetch_policy = mergeObjects(
-          getRecord(state.advancedSettings.fetch_policy),
+        state.advancedSettings["fetch_policy"] = mergeObjects(
+          getRecord(state.advancedSettings["fetch_policy"]),
           { timeout_seconds: parseNumber(readValue(), flag.name, { minExclusive: 0 }) },
         );
         break;
       case "--disable-cache-fallback":
-        state.advancedSettings.fetch_policy = mergeObjects(
-          getRecord(state.advancedSettings.fetch_policy),
+        state.advancedSettings["fetch_policy"] = mergeObjects(
+          getRecord(state.advancedSettings["fetch_policy"]),
           { disable_cache_fallback: true },
         );
         break;
       case "--allow-cache-fallback":
-        state.advancedSettings.fetch_policy = mergeObjects(
-          getRecord(state.advancedSettings.fetch_policy),
+        state.advancedSettings["fetch_policy"] = mergeObjects(
+          getRecord(state.advancedSettings["fetch_policy"]),
           { disable_cache_fallback: false },
         );
         break;
       case "--excerpt-settings":
-        state.advancedSettings.excerpt_settings = mergeObjects(
-          getRecord(state.advancedSettings.excerpt_settings),
+        state.advancedSettings["excerpt_settings"] = mergeObjects(
+          getRecord(state.advancedSettings["excerpt_settings"]),
           parseJsonObject(readValue(), flag.name),
         );
         break;
       case "--excerpt-max-chars":
       case "--excerpt-max-chars-per-result":
-        state.advancedSettings.excerpt_settings = mergeObjects(
-          getRecord(state.advancedSettings.excerpt_settings),
+        state.advancedSettings["excerpt_settings"] = mergeObjects(
+          getRecord(state.advancedSettings["excerpt_settings"]),
           { max_chars_per_result: parseInteger(readValue(), flag.name, { min: 1 }) },
         );
         break;
@@ -460,48 +460,48 @@ Examples:
 
 function buildCommand(state: ParseState, env: Environment): CliCommand {
   if (state.endpoint === "search" && state.positional.length > 0) {
-    if (state.generated.objective !== undefined) {
+    if (state.generated["objective"] !== undefined) {
       throw new CliError("Use either positional objective text or --objective, not both");
     }
 
-    state.generated.objective = state.positional.join(" ");
+    state.generated["objective"] = state.positional.join(" ");
   }
 
   if (state.searchQueries.length > 0) {
-    state.generated.search_queries = uniqueStrings(state.searchQueries);
+    state.generated["search_queries"] = uniqueStrings(state.searchQueries);
   }
 
   if (state.urls.length > 0) {
-    state.generated.urls = uniqueStrings(state.urls);
+    state.generated["urls"] = uniqueStrings(state.urls);
   }
 
   if (state.includeDomains.length > 0) {
-    state.advancedSettings.source_policy = mergeObjects(
-      getRecord(state.advancedSettings.source_policy),
+    state.advancedSettings["source_policy"] = mergeObjects(
+      getRecord(state.advancedSettings["source_policy"]),
       { include_domains: uniqueStrings(state.includeDomains) },
     );
   }
 
   if (state.excludeDomains.length > 0) {
-    state.advancedSettings.source_policy = mergeObjects(
-      getRecord(state.advancedSettings.source_policy),
+    state.advancedSettings["source_policy"] = mergeObjects(
+      getRecord(state.advancedSettings["source_policy"]),
       { exclude_domains: uniqueStrings(state.excludeDomains) },
     );
   }
 
   if (Object.keys(state.advancedSettings).length > 0) {
-    state.generated.advanced_settings = state.advancedSettings;
+    state.generated["advanced_settings"] = state.advancedSettings;
   }
 
   const request = mergeObjects(state.bodyBase ?? {}, state.generated);
   validateRequest(state.endpoint, request);
 
-  const apiKey = state.apiKey ?? env.PARALLEL_API_KEY;
+  const apiKey = state.apiKey ?? env["PARALLEL_API_KEY"];
   if (apiKey === undefined || apiKey.trim() === "") {
     throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.");
   }
 
-  const baseUrl = state.baseUrl ?? env.PARALLEL_BASE_URL ?? "https://api.parallel.ai/v1";
+  const baseUrl = state.baseUrl ?? env["PARALLEL_BASE_URL"] ?? "https://api.parallel.ai/v1";
 
   return {
     endpoint: state.endpoint,
@@ -529,94 +529,94 @@ function validateRequest(endpoint: ApiEndpoint, request: Record<string, unknown>
 }
 
 function validateCommonRequest(request: Record<string, unknown>): void {
-  if (request.objective !== undefined) {
-    assertStringValue(request.objective, "objective", { maxLength: 5000 });
+  if (request["objective"] !== undefined) {
+    assertStringValue(request["objective"], "objective", { maxLength: 5000 });
   }
 
-  if (request.search_queries !== undefined) {
-    validateSearchQueries(request.search_queries, false);
+  if (request["search_queries"] !== undefined) {
+    validateSearchQueries(request["search_queries"], false);
   }
 
-  if (request.max_chars_total !== undefined) {
-    assertIntegerValue(request.max_chars_total, "max_chars_total", { min: 1 });
+  if (request["max_chars_total"] !== undefined) {
+    assertIntegerValue(request["max_chars_total"], "max_chars_total", { min: 1 });
   }
 
-  if (request.client_model !== undefined) {
-    assertStringValue(request.client_model, "client_model");
+  if (request["client_model"] !== undefined) {
+    assertStringValue(request["client_model"], "client_model");
   }
 
-  if (request.session_id !== undefined) {
-    assertStringValue(request.session_id, "session_id", { maxLength: 1000 });
+  if (request["session_id"] !== undefined) {
+    assertStringValue(request["session_id"], "session_id", { maxLength: 1000 });
   }
 
-  if (request.advanced_settings !== undefined) {
-    if (!isRecord(request.advanced_settings)) {
+  if (request["advanced_settings"] !== undefined) {
+    if (!isRecord(request["advanced_settings"])) {
       throw new CliError("advanced_settings must be an object");
     }
 
-    validateFetchPolicy(request.advanced_settings.fetch_policy);
-    validateExcerptSettings(request.advanced_settings.excerpt_settings);
+    validateFetchPolicy(request["advanced_settings"]["fetch_policy"]);
+    validateExcerptSettings(request["advanced_settings"]["excerpt_settings"]);
   }
 }
 
 function validateSearchRequest(request: Record<string, unknown>): void {
-  validateSearchQueries(request.search_queries, true);
+  validateSearchQueries(request["search_queries"], true);
 
-  if (request.mode !== undefined) {
-    assertAllowedValue(request.mode, "mode", SEARCH_MODES);
+  if (request["mode"] !== undefined) {
+    assertAllowedValue(request["mode"], "mode", SEARCH_MODES);
   }
 
-  if (request.advanced_settings === undefined) {
+  if (request["advanced_settings"] === undefined) {
     return;
   }
 
-  if (!isRecord(request.advanced_settings)) {
+  if (!isRecord(request["advanced_settings"])) {
     throw new CliError("advanced_settings must be an object");
   }
 
-  const settings = request.advanced_settings;
-  if (settings.source_policy !== undefined) {
-    if (!isRecord(settings.source_policy)) {
+  const settings = request["advanced_settings"];
+  if (settings["source_policy"] !== undefined) {
+    if (!isRecord(settings["source_policy"])) {
       throw new CliError("advanced_settings.source_policy must be an object");
     }
 
     validateStringArray(
-      settings.source_policy.include_domains,
+      settings["source_policy"]["include_domains"],
       "advanced_settings.source_policy.include_domains",
     );
     validateStringArray(
-      settings.source_policy.exclude_domains,
+      settings["source_policy"]["exclude_domains"],
       "advanced_settings.source_policy.exclude_domains",
     );
-    if (settings.source_policy.after_date !== undefined) {
+    if (settings["source_policy"]["after_date"] !== undefined) {
       assertStringValue(
-        settings.source_policy.after_date,
+        settings["source_policy"]["after_date"],
         "advanced_settings.source_policy.after_date",
       );
     }
   }
 
-  if (settings.location !== undefined) {
-    assertStringValue(settings.location, "advanced_settings.location");
+  if (settings["location"] !== undefined) {
+    assertStringValue(settings["location"], "advanced_settings.location");
   }
 
-  if (settings.max_results !== undefined) {
-    assertIntegerValue(settings.max_results, "advanced_settings.max_results", { min: 1 });
+  if (settings["max_results"] !== undefined) {
+    assertIntegerValue(settings["max_results"], "advanced_settings.max_results", { min: 1 });
   }
 }
 
 function validateExtractRequest(request: Record<string, unknown>): void {
-  validateUrls(request.urls);
+  validateUrls(request["urls"]);
 
-  if (request.advanced_settings === undefined) {
+  if (request["advanced_settings"] === undefined) {
     return;
   }
 
-  if (!isRecord(request.advanced_settings)) {
+  if (!isRecord(request["advanced_settings"])) {
     throw new CliError("advanced_settings must be an object");
   }
 
-  const fullContent = request.advanced_settings.full_content;
+  const fullContent = request["advanced_settings"]["full_content"];
   if (fullContent === undefined || typeof fullContent === "boolean") {
     return;
   }
@@ -625,9 +625,9 @@ function validateExtractRequest(request: Record<string, unknown>): void {
     throw new CliError("advanced_settings.full_content must be a boolean or object");
   }
 
-  if (fullContent.max_chars_per_result !== undefined) {
+  if (fullContent["max_chars_per_result"] !== undefined) {
     assertIntegerValue(
-      fullContent.max_chars_per_result,
+      fullContent["max_chars_per_result"],
       "advanced_settings.full_content.max_chars_per_result",
       { min: 1 },
     );
@@ -686,21 +686,21 @@ function validateFetchPolicy(value: unknown): void {
     throw new CliError("advanced_settings.fetch_policy must be an object");
   }
 
-  if (value.max_age_seconds !== undefined) {
-    assertIntegerValue(value.max_age_seconds, "advanced_settings.fetch_policy.max_age_seconds", {
+  if (value["max_age_seconds"] !== undefined) {
+    assertIntegerValue(value["max_age_seconds"], "advanced_settings.fetch_policy.max_age_seconds", {
       min: 600,
     });
   }
 
-  if (value.timeout_seconds !== undefined) {
-    assertNumberValue(value.timeout_seconds, "advanced_settings.fetch_policy.timeout_seconds", {
+  if (value["timeout_seconds"] !== undefined) {
+    assertNumberValue(value["timeout_seconds"], "advanced_settings.fetch_policy.timeout_seconds", {
       minExclusive: 0,
     });
   }
 
   if (
-    value.disable_cache_fallback !== undefined &&
-    typeof value.disable_cache_fallback !== "boolean"
+    value["disable_cache_fallback"] !== undefined &&
+    typeof value["disable_cache_fallback"] !== "boolean"
   ) {
     throw new CliError("advanced_settings.fetch_policy.disable_cache_fallback must be a boolean");
   }
@@ -715,9 +715,9 @@ function validateExcerptSettings(value: unknown): void {
     throw new CliError("advanced_settings.excerpt_settings must be an object");
   }
 
-  if (value.max_chars_per_result !== undefined) {
+  if (value["max_chars_per_result"] !== undefined) {
     assertIntegerValue(
-      value.max_chars_per_result,
+      value["max_chars_per_result"],
       "advanced_settings.excerpt_settings.max_chars_per_result",
       { min: 1 },
     );
@@ -751,10 +751,10 @@ async function buildHttpError(response: Response): Promise<CliError> {
     try {
       const parsed = JSON.parse(detail) as unknown;
       if (isRecord(parsed)) {
-        if (typeof parsed.error === "string") {
-          detail = parsed.error;
-        } else if (Array.isArray(parsed.errors)) {
-          detail = parsed.errors.map((entry) => formatContentValue(entry)).join("\n");
+        if (typeof parsed["error"] === "string") {
+          detail = parsed["error"];
+        } else if (Array.isArray(parsed["errors"])) {
+          detail = parsed["errors"].map((entry) => formatContentValue(entry)).join("\n");
         }
       }
     } catch {
@@ -786,9 +786,9 @@ function formatTextResponse(response: unknown): string {
       lines.push(`   ${publishDate}`);
     }
 
-    if (Array.isArray(result.excerpts) && result.excerpts.length > 0) {
+    if (Array.isArray(result["excerpts"]) && result["excerpts"].length > 0) {
       lines.push("   Excerpts:");
-      for (const excerpt of result.excerpts) {
+      for (const excerpt of result["excerpts"]) {
         if (typeof excerpt === "string") {
           lines.push(indentBlock(excerpt, "   - ", "     "));
         }
@@ -819,25 +819,25 @@ function appendResponseMetadata(response: Record<string, unknown>, lines: string
     }
   }
 
-  if (response.warnings !== undefined && response.warnings !== null) {
-    lines.push(`warnings: ${formatContentValue(response.warnings)}`);
+  if (response["warnings"] !== undefined && response["warnings"] !== null) {
+    lines.push(`warnings: ${formatContentValue(response["warnings"])}`);
   }
 
-  if (Array.isArray(response.errors) && response.errors.length > 0) {
-    lines.push(`errors: ${formatContentValue(response.errors)}`);
+  if (Array.isArray(response["errors"]) && response["errors"].length > 0) {
+    lines.push(`errors: ${formatContentValue(response["errors"])}`);
   }
 
-  if (Array.isArray(response.usage) && response.usage.length > 0) {
-    lines.push(`usage: ${formatContentValue(response.usage)}`);
+  if (Array.isArray(response["usage"]) && response["usage"].length > 0) {
+    lines.push(`usage: ${formatContentValue(response["usage"])}`);
   }
 }
 
 function extractResults(response: unknown): Record<string, unknown>[] {
-  if (!isRecord(response) || !Array.isArray(response.results)) {
+  if (!isRecord(response) || !Array.isArray(response["results"])) {
     return [];
   }
 
-  return response.results.filter(isRecord);
+  return response["results"].filter(isRecord);
 }
 
 function formatContentValue(value: unknown): string {
