@@ -4,7 +4,7 @@ import { CliError, formatResponse, parseCli } from "../src/core.ts";
 
 const env = { PARALLEL_API_KEY: "test-key" };
 
-test("builds a search request with objective, queries, and advanced settings", () => {
+void test("builds a search request with objective, queries, and advanced settings", () => {
   const command = parseCli(
     [
       "search",
@@ -45,7 +45,7 @@ test("builds a search request with objective, queries, and advanced settings", (
   assert.equal(command.options.baseUrl, "https://api.parallel.ai/v1");
 });
 
-test("builds an extract request from positional and flag URLs", () => {
+void test("builds an extract request from positional and flag URLs", () => {
   const command = parseCli(
     [
       "extract",
@@ -85,7 +85,7 @@ test("builds an extract request from positional and flag URLs", () => {
   });
 });
 
-test("merges body as a base request and lets CLI flags override nested settings", () => {
+void test("merges body as a base request and lets CLI flags override nested settings", () => {
   const command = parseCli(
     [
       "search",
@@ -115,7 +115,7 @@ test("merges body as a base request and lets CLI flags override nested settings"
   });
 });
 
-test("rejects search requests without search_queries", () => {
+void test("rejects search requests without search_queries", () => {
   assert.throws(
     () => parseCli(["search", "Find", "official", "docs"], env),
     (error: unknown) =>
@@ -123,7 +123,7 @@ test("rejects search requests without search_queries", () => {
   );
 });
 
-test("rejects extract requests with more than 20 URLs", () => {
+void test("rejects extract requests with more than 20 URLs", () => {
   const urls = Array.from({ length: 21 }, (_, index) => `https://example.com/${index}`);
   assert.throws(
     () => parseCli(["extract", ...urls], env),
@@ -131,7 +131,7 @@ test("rejects extract requests with more than 20 URLs", () => {
   );
 });
 
-test("formats URL and text output", () => {
+void test("formats URL and text output", () => {
   const response = {
     results: [
       {
