@@ -8,8 +8,8 @@ hk = { version = "1.51.0", postinstall = "hk install --mise" }
 cocogitto = "7.0.0"
 actionlint = "1.7.12"
 zizmor = "1.26.1"
-npm = "11"
-node = "22"
+npm = "11.18.0"
+node = "22.23.1"
 
 [env]
 _.path = ["{{config_root}}/node_modules/.bin"]
@@ -19,29 +19,3 @@ _.path = ["{{config_root}}/node_modules/.bin"]
 "parallel:local" = "node {{config_root}}/src/cli.ts"
 "search:local" = "node {{config_root}}/src/cli.ts search"
 "extract:local" = "node {{config_root}}/src/cli.ts extract"
-
-[tasks.check]
-description = "Typecheck and lint the CLI"
-run = """
-npm run typecheck
-npm run lint
-"""
-
-[tasks.test]
-description = "Run tests"
-run = "npm test"
-
-[tasks.fmt]
-description = "Format with oxfmt"
-run = "npm run fmt"
-
-[tasks.lint]
-description = "Lint with oxlint"
-run = "npm run lint"
-
-[tasks."pack:dry"]
-description = "Validate the npm package contents without publishing"
-run = """
-npm run build
-npm pack --dry-run --allow-directory=all
-"""

@@ -13,5 +13,5 @@ The first release will be `0.0.1`. Current changes are tracked under `Unreleased
 - Search request flags for objectives, search queries, modes, source policy, fetch policy, excerpt settings, location, and result count.
 - Extract request flags for URLs, objectives, search queries, fetch policy, excerpt settings, and full content settings.
 - JSON, text, and URL output formats.
-- Node.js 24+ CLI distribution with compiled JavaScript, TypeScript source, a small npm bin shim, and no runtime dependencies or install scripts.
+- Node.js 22.19+ CLI distribution with compiled JavaScript, TypeScript source, a small npm bin shim, and no runtime dependencies or install scripts.
 - mise, TypeScript, oxfmt, oxlint, and node:test project setup.

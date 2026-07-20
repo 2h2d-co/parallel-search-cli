@@ -34,16 +34,18 @@
     "test": "node --test --test-concurrency=1 test/*.test.ts",
     "fmt": "oxfmt",
     "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
+    "lint:fix": "oxlint --fix",
+    "check": "hk check --all --check",
+    "pack:dry": "npm run build && npm pack --dry-run --allow-directory=all"
   },
   "devDependencies": {
-    "@types/node": "^24",
-    "oxfmt": "^0.48.0",
-    "oxlint": "^1.63.0",
-    "oxlint-tsgolint": "^0.22.1",
-    "typescript": "^6"
+    "@types/node": "22.20.1",
+    "oxfmt": "0.58.0",
+    "oxlint": "1.73.0",
+    "oxlint-tsgolint": "0.24.0",
+    "typescript": "7.0.2"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=22.19.0"
   }
 }

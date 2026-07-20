@@ -6,7 +6,7 @@ This project is not affiliated with, endorsed by, or maintained by Parallel Web 
 
 ## Requirements
 
-- Node.js 24 or newer
+- Node.js 22.19 or newer
 - A Parallel API key
 
 ## Package
@@ -116,15 +116,14 @@ Run `parallel-search --help`, `parallel-search help search`, or `parallel-search
 ```bash
 mise install
 npm install
-mise run check
+npm run check
 npm test
-npm run build
-mise run pack:dry
+npm run pack:dry
 ```
 
 Stable and prerelease `v<version>` tags trigger the shared CI release flow. CI validates, tests, builds, previews, and stages the package on npm with provenance. Stable versions use `latest`; prereleases derive their npm dist-tag from the first prerelease identifier.
 
-The project uses `oxfmt`, `oxlint`, TypeScript 6 with `erasableSyntaxOnly`, and publishes compiled JavaScript without install/postinstall scripts.
+The project uses `oxfmt`, `oxlint`, TypeScript 7 with `erasableSyntaxOnly`, and publishes compiled JavaScript without install/postinstall scripts.
 
 ## License
 
