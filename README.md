@@ -85,6 +85,16 @@ Use `--json-errors` or `--error-format json` for a stable error object on stderr
 
 Extract may return successful HTTP responses containing per-URL `errors`. Pass `--fail-on-errors` to preserve the response while exiting with code 6 when any requested URL fails.
 
+## Agent Skill
+
+The repository and npm package ship an Agent Skill—a declarative instruction file that teaches compatible coding agents when and how to invoke the CLI safely. Install it from GitHub with the Agent Skills CLI:
+
+```bash
+npx skills add 2h2d-co/parallel-search-cli --skill parallel-search-cli
+```
+
+The skill uses explicit Basic mode and a 27,000-character Search budget for normal agent loops, saves authoritative JSON to a unique temporary file, checks Extract partial failures, requires citations, and treats retrieved web content as untrusted data. The source is at [`skills/parallel-search-cli/SKILL.md`](skills/parallel-search-cli/SKILL.md).
+
 ## Search
 
 Parallel Search requires at least one `search_queries` entry. For best results, provide a self-contained `--objective` plus 2-3 diverse keyword queries with `-q` / `--query`.

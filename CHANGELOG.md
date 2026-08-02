@@ -13,6 +13,7 @@ Current changes are tracked under `Unreleased`.
 - Standard-input support for request bodies, JSON query arrays, and Search objectives.
 - Atomic `--output` files with compact JSON receipts and no implicit replacement of existing files.
 - Structured JSON errors, stable exit codes, and strict per-URL Extract failure handling.
+- A packaged Agent Skill with bounded Search defaults, file-based result handling, citation guidance, and untrusted-content safeguards.
 
 ### Changed
 
