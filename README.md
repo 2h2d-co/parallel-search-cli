@@ -227,7 +227,7 @@ Run the separate live integration suite with a real Parallel API key:
 PARALLEL_API_KEY="..." npm run test:integration
 ```
 
-The integration suite builds and unpacks the same temporary npm artifact, then makes billable requests to the real `https://api.parallel.ai/v1` service. It verifies Turbo Search, focused Extract, response metadata, excerpts, usage, and Search-to-Extract session reuse. It fails rather than skipping when `PARALLEL_API_KEY` is missing. The GitHub `Live API integration` workflow provides the same suite as a manual, protected-environment check.
+The integration command first runs the complete deterministic suite, then builds and unpacks the same temporary npm artifact for real requests to `https://api.parallel.ai/v1`. Live coverage includes every Search mode, focused and whole-page Extract, batch Extract, full content, advanced settings, all output formats, session reuse, authentication, API validation, timeout, network, partial Extract, and output-file contracts. It fails rather than skipping when `PARALLEL_API_KEY` is missing. The GitHub `Live API integration` workflow provides the same suite as a manual, protected-environment check.
 
 Stable and prerelease `v<version>` tags trigger the shared CI release flow. CI validates, tests, builds, previews, and stages the package on npm with provenance. Stable versions use `latest`; prereleases derive their npm dist-tag from the first prerelease identifier.
 

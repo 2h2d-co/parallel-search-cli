@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { CliError, formatResponse, helpText, parseCli, requestPreview } from "../src/core.ts";
 import { requestSchema } from "../src/schema.ts";
@@ -46,6 +47,34 @@ void test("builds a search request with objective, queries, and advanced setting
   });
   assert.equal(command.options.apiKey, "test-key");
   assert.equal(command.options.baseUrl, "https://api.parallel.ai/v1");
+});
+
+void test("supports help, version, and equivalent option aliases", () => {
+  assert.deepEqual(parseCli(["-h"], {}), { kind: "help" });
+  assert.deepEqual(parseCli(["search", "--help"], {}), { endpoint: "search", kind: "help" });
+  assert.deepEqual(parseCli(["-V"], {}), { kind: "version" });
+
+  const excluded = parseCli(
+    ["search", "--query", "Parallel Search API", "--exclude-domains", "example.com,test.dev"],
+    env,
+  );
+  assert.equal(excluded.kind, "run");
+  if (excluded.kind === "run") {
+    assert.deepEqual(excluded.options.request["advanced_settings"], {
+      source_policy: { exclude_domains: ["example.com", "test.dev"] },
+    });
+  }
+
+  const fullContent = parseCli(
+    ["extract", "https://example.com", "--full-content-max-chars", "2000"],
+    env,
+  );
+  assert.equal(fullContent.kind, "run");
+  if (fullContent.kind === "run") {
+    assert.deepEqual(fullContent.options.request["advanced_settings"], {
+      full_content: { max_chars_per_result: 2000 },
+    });
+  }
 });
 
 void test("supports Turbo Search mode through flags and base request bodies", () => {
@@ -528,6 +557,29 @@ void test("formats Extract errors, warnings, usage, and session metadata", () =>
   assert.match(text, /errors: \[/);
   assert.match(text, /"error_type": "fetch_error"/);
   assert.match(text, /usage: \[/);
+});
+
+void test("references every public parser option in behavioral coverage", () => {
+  const parserSource = readFileSync("src/core.ts", "utf8");
+  const behavioralTests = [
+    "test/artifact.test.ts",
+    "test/cli.test.ts",
+    "test/core.test.ts",
+    "test/integration/live.test.ts",
+  ]
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
+  const parserOptions = [...parserSource.matchAll(/case "(-{1,2}[A-Za-z][A-Za-z-]*)":/g)].map(
+    (match) => match[1],
+  );
+  const uncovered = [...new Set(parserOptions)].filter(
+    (option) =>
+      option !== undefined &&
+      !behavioralTests.includes(`"${option}"`) &&
+      !behavioralTests.includes(`\`${option}\``),
+  );
+
+  assert.deepEqual(uncovered, []);
 });
 
 void test("formats URL and text output", () => {

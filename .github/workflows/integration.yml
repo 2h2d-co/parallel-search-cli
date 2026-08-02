@@ -37,10 +37,7 @@ jobs:
       - name: Check
         run: npm run check
 
-      - name: Test source and packed artifact
-        run: npm test
-
-      - name: Test packed artifact against the real API
+      - name: Test all CLI behavior and the packed artifact against the real API
         run: npm run test:integration
         env:
           PARALLEL_API_KEY: "${{ secrets.PARALLEL_API_KEY }}"
