@@ -2,9 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-The first release will be `0.0.1`. Current changes are tracked under `Unreleased`.
+Current changes are tracked under `Unreleased`.
 
 ## Unreleased
+
+## [0.0.1] - 2026-08-02
 
 ### Added
 

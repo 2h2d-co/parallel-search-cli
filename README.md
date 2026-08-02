@@ -19,7 +19,7 @@ This project is not affiliated with, endorsed by, or maintained by Parallel Web 
 ## Install
 
 ```bash
-npm install -g parallel-search-cli@alpha
+npm install -g parallel-search-cli
 ```
 
 ## Authentication
