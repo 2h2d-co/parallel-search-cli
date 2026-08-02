@@ -11,11 +11,18 @@ Current changes are tracked under `Unreleased`.
 - Dry-run request previews that validate and print the effective request without authentication or an API call.
 - Machine-readable JSON Schemas for Search and Extract request bodies.
 - Standard-input support for request bodies, JSON query arrays, and Search objectives.
+- Atomic `--output` files with compact JSON receipts and no implicit replacement of existing files.
+- Structured JSON errors, stable exit codes, and strict per-URL Extract failure handling.
 
 ### Changed
 
 - Require an explicit `search` or `extract` command and reject unknown commands, help topics, and missing option values before making requests.
 - Treat singular query, URL, and domain flags as exact values; plural query and URL flags now accept JSON string arrays.
+
+### Fixed
+
+- Preserve nested API error messages, HTTP status codes, reference IDs, and structured details.
+- Distinguish validation, authentication, API, timeout, network, partial Extract, and output failures with stable exit codes.
 
 ## [0.0.1] - 2026-08-02
 

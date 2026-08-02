@@ -55,6 +55,36 @@ parallel-search schema search
 parallel-search schema extract
 ```
 
+## Reliable output and errors
+
+Use `-o` / `--output` to keep large payloads out of harness stdout. The CLI writes the selected output format atomically with mode `0600`, refuses to replace an existing file, and prints a compact JSON receipt containing the absolute path and byte count:
+
+```bash
+tmpdir="$(mktemp -d)"
+parallel-search search \
+  --mode basic \
+  --objective "Find current Parallel Search API guidance" \
+  -q "Parallel Search API" \
+  --max-chars-total 27000 \
+  --compact \
+  --json-errors \
+  --output "$tmpdir/search.json"
+```
+
+Use `--json-errors` or `--error-format json` for a stable error object on stderr. API errors include the HTTP status, reference ID, and structured detail when available.
+
+| Exit code | Meaning                                        |
+| --------- | ---------------------------------------------- |
+| 0         | Success                                        |
+| 2         | Invalid command or request input               |
+| 3         | Missing or invalid authentication              |
+| 4         | API error                                      |
+| 5         | Network failure or timeout                     |
+| 6         | Per-URL Extract errors with `--fail-on-errors` |
+| 7         | Output file error                              |
+
+Extract may return successful HTTP responses containing per-URL `errors`. Pass `--fail-on-errors` to preserve the response while exiting with code 6 when any requested URL fails.
+
 ## Search
 
 Parallel Search requires at least one `search_queries` entry. For best results, provide a self-contained `--objective` plus 2-3 diverse keyword queries with `-q` / `--query`.
@@ -156,6 +186,9 @@ parallel-search extract \
 --session-id <id>                Reuse across related calls; use a new ID per task.
 --format <json|text|urls>        Output format. Default: json.
 --compact                        Minify JSON output.
+-o, --output <path>              Atomically write output without replacing an existing file.
+--error-format <text|json>       Error format on stderr. Default: text.
+--json-errors                    Alias for --error-format json.
 --dry-run                        Print the effective request without authentication or an API call.
 --timeout <ms>                   Request timeout. Default: 60000.
 ```

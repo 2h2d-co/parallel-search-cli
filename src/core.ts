@@ -4,9 +4,20 @@ export const VERSION = "0.0.1";
 
 const SEARCH_MODES = ["turbo", "basic", "advanced"];
 const OUTPUT_FORMATS = ["json", "text", "urls"];
+const ERROR_FORMATS = ["text", "json"];
 
 export type ApiEndpoint = "search" | "extract";
+export type ErrorFormat = "text" | "json";
 export type OutputFormat = "json" | "text" | "urls";
+export type CliErrorKind =
+  | "api"
+  | "auth"
+  | "internal"
+  | "network"
+  | "output"
+  | "partial"
+  | "timeout"
+  | "usage";
 
 export type CliCommand =
   | { kind: "help"; endpoint?: ApiEndpoint }
@@ -24,7 +35,9 @@ export type CliRunOptions = {
   compact: boolean;
   dryRun: boolean;
   endpoint: ApiEndpoint;
+  failOnErrors: boolean;
   format: OutputFormat;
+  outputPath: string | undefined;
   request: Record<string, unknown>;
   timeoutMs: number;
 };
@@ -44,22 +57,50 @@ type ParseState = {
   dryRun: boolean;
   endpoint: ApiEndpoint;
   excludeDomains: string[];
+  failOnErrors: boolean;
   format: OutputFormat;
   generated: Record<string, unknown>;
   includeDomains: string[];
+  outputPath?: string;
   positional: string[];
   searchQueries: string[];
   timeoutMs: number;
   urls: string[];
 };
 
-export class CliError extends Error {
-  exitCode: number;
+const ERROR_EXIT_CODES: Record<CliErrorKind, number> = {
+  api: 4,
+  auth: 3,
+  internal: 1,
+  network: 5,
+  output: 7,
+  partial: 6,
+  timeout: 5,
+  usage: 2,
+};
 
-  constructor(message: string, exitCode = 2) {
+type CliErrorOptions = {
+  detail?: unknown;
+  kind?: CliErrorKind;
+  refId?: string | undefined;
+  status?: number | undefined;
+};
+
+export class CliError extends Error {
+  detail: unknown;
+  exitCode: number;
+  kind: CliErrorKind;
+  refId: string | undefined;
+  status: number | undefined;
+
+  constructor(message: string, options: CliErrorOptions = {}) {
     super(message);
     this.name = "CliError";
-    this.exitCode = exitCode;
+    this.detail = options.detail;
+    this.kind = options.kind ?? "usage";
+    this.exitCode = ERROR_EXIT_CODES[this.kind];
+    this.refId = options.refId;
+    this.status = options.status;
   }
 }
 
@@ -123,6 +164,7 @@ export function parseCli(
     dryRun: false,
     endpoint,
     excludeDomains: [],
+    failOnErrors: false,
     format: "json",
     generated: {},
     includeDomains: [],
@@ -343,11 +385,24 @@ export function parseCli(
       case "--json":
         state.format = "json";
         break;
+      case "--error-format":
+        parseAllowed(readValue(), flag.name, ERROR_FORMATS);
+        break;
+      case "--json-errors":
+        break;
+      case "-o":
+      case "--output":
+        state.outputPath = readValue();
+        break;
       case "--compact":
         state.compact = true;
         break;
       case "--dry-run":
         state.dryRun = true;
+        break;
+      case "--fail-on-errors":
+        ensureEndpoint(state.endpoint, "extract", flag.name);
+        state.failOnErrors = true;
         break;
       case "--timeout":
       case "--timeout-ms":
@@ -394,10 +449,16 @@ Common options:
       --format <json|text|urls>  Output format. Default: json.
       --json                     Alias for --format json.
       --compact                  Minify JSON output.
+  -o, --output <path>            Atomically write output; refuses to replace an existing file.
+      --error-format <text|json> Error format on stderr. Default: text.
+      --json-errors              Alias for --error-format json.
       --dry-run                  Print the effective request as JSON without authenticating or calling the API.
       --timeout <ms>             Request timeout. Default: 60000.
   -h, --help                     Show help.
   -V, --version                  Show version.
+
+Exit codes: 0 success, 2 usage, 3 authentication, 4 API, 5 network/timeout,
+6 strict Extract partial failure, 7 output file.
 
 Run "parallel-search help search" or "parallel-search help extract" for command-specific options.
 `;
@@ -405,11 +466,20 @@ Run "parallel-search help search" or "parallel-search help extract" for command-
 
 export async function apiJson(options: CliRunOptions): Promise<unknown> {
   if (options.apiKey === undefined || options.apiKey.trim() === "") {
-    throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.", 3);
+    throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.", {
+      kind: "auth",
+    });
   }
 
   const response = await postApi({ ...options, apiKey: options.apiKey });
-  return response.json();
+  try {
+    return await response.json();
+  } catch {
+    throw new CliError(`API returned invalid JSON with status ${response.status}`, {
+      kind: "api",
+      status: response.status,
+    });
+  }
 }
 
 export function requestPreview(options: CliRunOptions): Record<string, unknown> {
@@ -436,6 +506,70 @@ export function formatResponse(response: unknown, format: OutputFormat, compact:
     case "text":
       return formatTextResponse(response);
   }
+}
+
+export function errorFormatFromArgv(argv: readonly string[]): ErrorFormat {
+  let format: ErrorFormat = "text";
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = argv[index];
+    if (value === "--json-errors") {
+      format = "json";
+      continue;
+    }
+    if (value === "--error-format") {
+      const next = argv[index + 1];
+      if (next === "json" || next === "text") {
+        format = next;
+      }
+      continue;
+    }
+    if (value?.startsWith("--error-format=")) {
+      const inline = value.slice("--error-format=".length);
+      if (inline === "json" || inline === "text") {
+        format = inline;
+      }
+    }
+  }
+
+  return format;
+}
+
+export function formatCliError(error: unknown, format: ErrorFormat): string {
+  const cliError =
+    error instanceof CliError
+      ? error
+      : new CliError(error instanceof Error ? error.message : String(error), { kind: "internal" });
+
+  if (format === "text") {
+    return cliError.refId === undefined
+      ? cliError.message
+      : `${cliError.message} (ref_id: ${cliError.refId})`;
+  }
+
+  const detail: Record<string, unknown> = {
+    kind: cliError.kind,
+    message: cliError.message,
+  };
+  if (cliError.status !== undefined) {
+    detail["status"] = cliError.status;
+  }
+  if (cliError.refId !== undefined) {
+    detail["ref_id"] = cliError.refId;
+  }
+  if (cliError.detail !== undefined && cliError.detail !== null) {
+    detail["detail"] = cliError.detail;
+  }
+
+  return JSON.stringify({ error: detail, type: "error" });
+}
+
+export function extractResponseErrors(response: unknown): unknown[] {
+  if (!isRecord(response) || !Array.isArray(response["errors"])) {
+    return [];
+  }
+
+  return response["errors"];
 }
 
 function searchHelpText(): string {
@@ -482,6 +616,9 @@ Output options:
       --format <json|text|urls>        Output format. Default: json.
       --json                           Alias for --format json.
       --compact                        Minify JSON output.
+  -o, --output <path>                  Atomically write output; refuses to replace an existing file.
+      --error-format <text|json>       Error format on stderr. Default: text.
+      --json-errors                    Alias for --error-format json.
       --dry-run                        Print the effective request as JSON without an API call.
       --timeout <ms>                   Request timeout. Default: 60000.
       --api-key <key>                  Defaults to PARALLEL_API_KEY.
@@ -541,6 +678,10 @@ Output options:
       --format <json|text|urls>        Output format. Default: json.
       --json                           Alias for --format json.
       --compact                        Minify JSON output.
+  -o, --output <path>                  Atomically write output; refuses to replace an existing file.
+      --error-format <text|json>       Error format on stderr. Default: text.
+      --json-errors                    Alias for --error-format json.
+      --fail-on-errors                 Exit 6 when the API reports any per-URL Extract errors.
       --dry-run                        Print the effective request as JSON without an API call.
       --timeout <ms>                   Request timeout. Default: 60000.
       --api-key <key>                  Defaults to PARALLEL_API_KEY.
@@ -596,7 +737,9 @@ function buildCommand(state: ParseState, env: Environment): CliCommand {
 
   const apiKey = state.apiKey ?? env["PARALLEL_API_KEY"];
   if (!state.dryRun && (apiKey === undefined || apiKey.trim() === "")) {
-    throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.", 3);
+    throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.", {
+      kind: "auth",
+    });
   }
 
   const baseUrl = state.baseUrl ?? env["PARALLEL_BASE_URL"] ?? "https://api.parallel.ai/v1";
@@ -615,7 +758,9 @@ function buildCommand(state: ParseState, env: Environment): CliCommand {
       compact: state.compact,
       dryRun: state.dryRun,
       endpoint: state.endpoint,
+      failOnErrors: state.failOnErrors,
       format: state.format,
+      outputPath: state.outputPath,
       request,
       timeoutMs: state.timeoutMs,
     },
@@ -897,16 +1042,26 @@ function validateExcerptSettings(value: unknown): void {
 }
 
 async function postApi(options: CliRunOptions & { apiKey: string }): Promise<Response> {
-  const response = await fetch(apiUrl(options.baseUrl, options.endpoint), {
-    body: JSON.stringify(options.request),
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "x-api-key": options.apiKey,
-    },
-    method: "POST",
-    signal: AbortSignal.timeout(options.timeoutMs),
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(options.baseUrl, options.endpoint), {
+      body: JSON.stringify(options.request),
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "x-api-key": options.apiKey,
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(options.timeoutMs),
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new CliError(`Request timed out after ${options.timeoutMs} ms`, { kind: "timeout" });
+    }
+
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new CliError(`Network request failed: ${reason}`, { kind: "network" });
+  }
 
   if (!response.ok) {
     throw await buildHttpError(response);
@@ -916,29 +1071,47 @@ async function postApi(options: CliRunOptions & { apiKey: string }): Promise<Res
 }
 
 async function buildHttpError(response: Response): Promise<CliError> {
-  const text = await response.text();
-  let detail = text.trim();
+  const text = (await response.text()).trim();
+  const statusLabel = `${response.status} ${response.statusText}`.trim();
+  let detail: unknown;
+  let message = statusLabel;
+  let refId: string | undefined;
 
-  if (detail !== "") {
+  if (text !== "") {
     try {
-      const parsed = JSON.parse(detail) as unknown;
+      const parsed = JSON.parse(text) as unknown;
+      detail = parsed;
       if (isRecord(parsed)) {
-        if (typeof parsed["error"] === "string") {
-          detail = parsed["error"];
+        const nestedError = parsed["error"];
+        if (typeof nestedError === "string") {
+          message = `${statusLabel}: ${nestedError}`;
+          detail = undefined;
+        } else if (isRecord(nestedError)) {
+          const nestedMessage = stringField(nestedError, "message");
+          if (nestedMessage !== undefined) {
+            message = `${statusLabel}: ${nestedMessage}`;
+          }
+          refId = stringField(nestedError, "ref_id");
+          detail = nestedError["detail"];
         } else if (Array.isArray(parsed["errors"])) {
-          detail = parsed["errors"].map((entry) => formatContentValue(entry)).join("\n");
+          message = `${statusLabel}: ${parsed["errors"]
+            .map((entry) => formatContentValue(entry))
+            .join("\n")}`;
+          detail = parsed["errors"];
         }
       }
     } catch {
-      // Keep the plain text body.
+      message = `${statusLabel}: ${text}`;
+      detail = text;
     }
   }
 
-  const message =
-    detail === ""
-      ? `${response.status} ${response.statusText}`
-      : `${response.status} ${response.statusText}: ${detail}`;
-  return new CliError(message);
+  return new CliError(message, {
+    detail,
+    kind: response.status === 401 ? "auth" : "api",
+    refId,
+    status: response.status,
+  });
 }
 
 function formatTextResponse(response: unknown): string {
