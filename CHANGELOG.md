@@ -19,4 +19,5 @@ The first release will be `0.0.1`. Current changes are tracked under `Unreleased
 ### Changed
 
 - Align Search help and README guidance with current query, mode, advanced-setting, source-policy, and session best practices.
+- Align Extract help and README guidance with current focusing, batching, full-content, fetch-policy, and session best practices.
 - Validate Search source-policy domains, conflicting include/exclude lists, the combined 200-domain limit, RFC 3339 dates, location format, and the public 20-result cap before sending requests.

@@ -69,6 +69,14 @@ void test("documents current Search modes and query guidance", () => {
   assert.match(help, /Avoid sentences, instructions, and site: operators/);
 });
 
+void test("documents current Extract focusing and advanced-setting guidance", () => {
+  const help = helpText("extract");
+  assert.match(help, /2-3 diverse 3-6 word queries/);
+  assert.match(help, /does not affect full content/);
+  assert.match(help, /allow-cache-fallback/);
+  assert.match(help, /redundant with excerpts and may warn/);
+});
+
 void test("builds an extract request from positional and flag URLs", () => {
   const command = parseCli(
     [
@@ -79,11 +87,24 @@ void test("builds an extract request from positional and flag URLs", () => {
       "--objective",
       "Find pricing details.",
       "-q",
-      "pricing details",
+      "pricing plan details",
+      "-q",
+      "subscription cost changes",
+      "--max-chars-total",
+      "50000",
+      "--client-model",
+      "gpt-5.4",
+      "--session-id",
+      "pricing-review",
+      "--excerpt-max-chars-per-result",
+      "10000",
       "--full-content-max-chars-per-result",
       "50000",
       "--max-age-seconds",
       "600",
+      "--timeout-seconds",
+      "30",
+      "--disable-cache-fallback",
     ],
     env,
   );
@@ -96,17 +117,62 @@ void test("builds an extract request from positional and flag URLs", () => {
   assert.equal(command.endpoint, "extract");
   assert.deepEqual(command.options.request, {
     advanced_settings: {
+      excerpt_settings: {
+        max_chars_per_result: 10000,
+      },
       fetch_policy: {
+        disable_cache_fallback: true,
         max_age_seconds: 600,
+        timeout_seconds: 30,
       },
       full_content: {
         max_chars_per_result: 50000,
       },
     },
+    client_model: "gpt-5.4",
+    max_chars_total: 50000,
     objective: "Find pricing details.",
-    search_queries: ["pricing details"],
+    search_queries: ["pricing plan details", "subscription cost changes"],
+    session_id: "pricing-review",
     urls: ["https://example.com/a", "https://example.com/b"],
   });
+});
+
+void test("supports Extract full-content boolean and raw advanced-setting flags", () => {
+  const fullContent = parseCli(["extract", "https://example.com", "--full-content"], env);
+  assert.equal(fullContent.kind, "run");
+  if (fullContent.kind === "run") {
+    assert.deepEqual(fullContent.options.request["advanced_settings"], { full_content: true });
+  }
+
+  const noFullContent = parseCli(["extract", "https://example.com", "--no-full-content"], env);
+  assert.equal(noFullContent.kind, "run");
+  if (noFullContent.kind === "run") {
+    assert.deepEqual(noFullContent.options.request["advanced_settings"], { full_content: false });
+  }
+
+  const rawSettings = parseCli(
+    [
+      "extract",
+      "https://example.com",
+      "--fetch-policy",
+      '{"max_age_seconds":600,"disable_cache_fallback":true}',
+      "--allow-cache-fallback",
+      "--excerpt-settings",
+      '{"max_chars_per_result":5000}',
+      "--full-content-settings",
+      '{"max_chars_per_result":50000}',
+    ],
+    env,
+  );
+  assert.equal(rawSettings.kind, "run");
+  if (rawSettings.kind === "run") {
+    assert.deepEqual(rawSettings.options.request["advanced_settings"], {
+      excerpt_settings: { max_chars_per_result: 5000 },
+      fetch_policy: { disable_cache_fallback: false, max_age_seconds: 600 },
+      full_content: { max_chars_per_result: 50000 },
+    });
+  }
 });
 
 void test("merges body as a base request and lets CLI flags override nested settings", () => {
@@ -274,6 +340,66 @@ void test("rejects extract requests with more than 20 URLs", () => {
     () => parseCli(["extract", ...urls], env),
     (error: unknown) => error instanceof CliError && error.message.includes("at most 20 URLs"),
   );
+});
+
+void test("rejects invalid Extract URLs, query counts, and advanced limits", () => {
+  assert.throws(
+    () => parseCli(["extract", "file:///tmp/report.pdf"], env),
+    (error: unknown) => error instanceof CliError && error.message.includes("http or https URL"),
+  );
+
+  const queries = Array.from({ length: 6 }, (_, index) => `focused query ${index}`);
+  assert.throws(
+    () =>
+      parseCli(
+        [
+          "extract",
+          "--body",
+          JSON.stringify({ search_queries: queries, urls: ["https://example.com"] }),
+        ],
+        env,
+      ),
+    (error: unknown) => error instanceof CliError && error.message.includes("at most 5 queries"),
+  );
+
+  assert.throws(
+    () => parseCli(["extract", "https://example.com", "--max-age-seconds", "599"], env),
+    (error: unknown) => error instanceof CliError && error.message.includes("must be >= 600"),
+  );
+
+  assert.throws(
+    () =>
+      parseCli(["extract", "https://example.com", "--full-content-max-chars-per-result", "0"], env),
+    (error: unknown) => error instanceof CliError && error.message.includes("must be >= 1"),
+  );
+});
+
+void test("formats Extract errors, warnings, usage, and session metadata", () => {
+  const response = {
+    errors: [
+      {
+        content: "Source returned an error",
+        error_type: "fetch_error",
+        http_status_code: 500,
+        url: "https://example.com/failure",
+      },
+    ],
+    extract_id: "extract_123",
+    results: [],
+    session_id: "session_123",
+    usage: [{ count: 1, name: "sku_extract_excerpts" }],
+    warnings: [{ message: "Example warning", type: "warning" }],
+  };
+
+  assert.equal(formatResponse(response, "urls", false), "");
+
+  const text = formatResponse(response, "text", false);
+  assert.match(text, /extract_id: extract_123/);
+  assert.match(text, /session_id: session_123/);
+  assert.match(text, /warnings: \[/);
+  assert.match(text, /errors: \[/);
+  assert.match(text, /"error_type": "fetch_error"/);
+  assert.match(text, /usage: \[/);
 });
 
 void test("formats URL and text output", () => {

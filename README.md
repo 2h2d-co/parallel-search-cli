@@ -74,7 +74,9 @@ Source policy flags such as `--include-domain` are hard allow-lists. Prefer stee
 
 ## Extract
 
-Parallel Extract accepts up to 20 public URLs and returns clean markdown excerpts focused by `--objective` and optional `-q` queries. Without an objective or queries, the API falls back to whole-page markdown.
+Parallel Extract converts up to 20 public URLs—including JavaScript-heavy pages and PDFs—into clean markdown. Batch related URLs in one request when they serve the same task.
+
+For focused excerpts, provide a self-contained, specific `--objective`. Add 2-3 diverse keyword queries of roughly 3-6 words with `-q` when the objective alone may be ambiguous. Without an objective or queries, excerpts fall back to whole-page markdown and may include boilerplate.
 
 ```bash
 parallel-search extract \
@@ -82,7 +84,25 @@ parallel-search extract \
   --objective "When was the United Nations established?"
 ```
 
-Request focused excerpts plus full content:
+A common workflow is to Search first, select the most relevant URLs, and then Extract deeper detail from only those pages:
+
+```bash
+parallel-search search \
+  --mode basic \
+  --objective "Find official React documentation about preventing unnecessary renders" \
+  -q "React memo optimization" \
+  -q "React rendering performance" \
+  --format urls
+
+parallel-search extract \
+  https://react.dev/reference/react/memo \
+  https://react.dev/reference/react/useMemo \
+  --objective "Compare when React recommends memo and useMemo" \
+  -q "React memo guidance" \
+  -q "React useMemo guidance"
+```
+
+Full content is disabled by default. Enabling it returns both focused excerpts and full content beginning at the start of each page. Cap full content separately because top-level `--max-chars-total` affects only excerpts. Request full content only when excerpts are insufficient; without an objective or queries it is redundant with whole-page excerpts and may produce an API warning.
 
 ```bash
 parallel-search extract \
@@ -91,7 +111,7 @@ parallel-search extract \
   --full-content-max-chars-per-result 50000
 ```
 
-Use fetch policy flags when you need fresher source content:
+Leave advanced settings unset unless the task requires them. Live fetching can substantially increase latency and is subject to source-site rate limits. Cache fallback remains enabled by default; use `--disable-cache-fallback` only for fresh-or-fail tasks.
 
 ```bash
 parallel-search extract \

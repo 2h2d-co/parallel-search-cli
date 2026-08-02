@@ -426,28 +426,37 @@ Usage:
   parallel-search extract --url https://example.com --objective "Find pricing details"
 
 Extract request options:
-      --url <url[,..]>                 URL to extract. Repeatable. Positional URLs are also accepted.
-      --objective <text>               Natural-language extraction goal.
-  -q, --query <query>                  Keyword query to focus extraction. Repeatable.
+      --url <url[,..]>                 URL to extract. Repeatable; up to 20 positional or flag URLs.
+      --objective <text>               Self-contained, specific extraction goal.
+  -q, --query <query>                  Keyword query to focus extraction. Repeatable; 2-3 is recommended.
       --search-query <query>           Alias for --query.
-      --max-chars-total <n>            Total excerpt character budget.
+      --max-chars-total <n>            Total excerpt budget; does not affect full content.
       --client-model <model>           Model that will consume the results.
-      --session-id <id>                Group related calls.
+      --session-id <id>                Reuse across related calls; use a new ID per task.
       --body <json|@file>              Base extract request JSON. CLI flags override matching fields.
 
-Advanced extract settings:
+Advanced extract settings (usually omit; live fetch and full content can increase latency):
+      --fetch-policy <json|@file>      Raw advanced_settings.fetch_policy object.
       --max-age-seconds <n>            Fetch live when indexed content is older than n seconds. Minimum: 600.
       --timeout-seconds <n>            Live fetch timeout_seconds.
       --disable-cache-fallback         Fail when live fetch fails instead of using older indexed content.
+      --allow-cache-fallback           Use older indexed content when live fetch fails. This is the default.
+      --excerpt-settings <json|@file>  Raw advanced_settings.excerpt_settings object.
       --excerpt-max-chars-per-result <n>
                                       Excerpt budget per result.
-      --full-content                   Enable full_content with API defaults.
+      --full-content                   Return excerpts plus full content from the start of each page.
       --full-content-max-chars-per-result <n>
-                                      Enable full_content and cap full content per result.
+                                      Enable and cap full content per result from the page beginning.
       --full-content-settings <json|@file>
                                       Raw advanced_settings.full_content object.
-      --no-full-content                Explicitly disable full_content.
+      --no-full-content                Explicitly disable full_content. This is the default.
       --advanced-settings <json|@file> Raw advanced_settings object.
+
+Guidance:
+  Provide a self-contained objective; add 2-3 diverse 3-6 word queries when extra focus helps.
+  Batch related URLs. Without a focus, excerpts fall back to whole-page markdown with boilerplate.
+  Request full content only when needed. Without a focus it is redundant with excerpts and may warn.
+  Keep cache fallback enabled unless the task requires fresh-or-fail behavior.
 
 Output options:
       --format <json|text|urls>        Output format. Default: json.
@@ -461,8 +470,9 @@ Output options:
 
 Examples:
   parallel-search extract https://www.un.org/en/about-us/history-of-the-un --objective "When was the United Nations established?"
-  parallel-search extract --url https://example.com/article --objective "React rendering performance tips" -q "React memo" -q "useMemo useCallback"
-  parallel-search extract --url https://example.com/report.pdf --full-content-max-chars-per-result 50000
+  parallel-search extract --url https://example.com/article --objective "React rendering performance tips" -q "React memo optimization" -q "useMemo useCallback performance"
+  parallel-search extract --url https://example.com/report.pdf --objective "Extract methodology and headline findings" --full-content-max-chars-per-result 50000
+  parallel-search extract https://example.com/a https://example.com/b --objective "Compare the documented pricing and limits"
 `;
 }
 
