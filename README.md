@@ -219,6 +219,16 @@ npm test
 npm run pack:dry
 ```
 
+`npm test` combines fast source-level tests with black-box package tests. The package tests copy the publishable sources into a temporary directory, compile them, create an npm tarball, unpack it, and invoke its declared `parallel-search` binary directly. This catches packaging and compiled-runtime failures that source-only tests cannot detect without making API requests.
+
+Run the separate live integration suite with a real Parallel API key:
+
+```bash
+PARALLEL_API_KEY="..." npm run test:integration
+```
+
+The integration suite builds and unpacks the same temporary npm artifact, then makes billable requests to the real `https://api.parallel.ai/v1` service. It verifies Turbo Search, focused Extract, response metadata, excerpts, usage, and Search-to-Extract session reuse. It fails rather than skipping when `PARALLEL_API_KEY` is missing. The GitHub `Live API integration` workflow provides the same suite as a manual, protected-environment check.
+
 Stable and prerelease `v<version>` tags trigger the shared CI release flow. CI validates, tests, builds, previews, and stages the package on npm with provenance. Stable versions use `latest`; prereleases derive their npm dist-tag from the first prerelease identifier.
 
 The project uses `oxfmt`, `oxlint`, TypeScript 7 with `erasableSyntaxOnly`, and publishes compiled JavaScript without install/postinstall scripts.
