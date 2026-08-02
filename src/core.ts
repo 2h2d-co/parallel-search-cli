@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 export const VERSION = "0.0.1-alpha.1";
 
-const SEARCH_MODES = ["basic", "advanced"];
+const SEARCH_MODES = ["turbo", "basic", "advanced"];
 const OUTPUT_FORMATS = ["json", "text", "urls"];
 
 export type ApiEndpoint = "search" | "extract";
@@ -191,7 +191,10 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         break;
       case "--max-results":
         ensureEndpoint(state.endpoint, "search", flag.name);
-        state.advancedSettings["max_results"] = parseInteger(readValue(), flag.name, { min: 1 });
+        state.advancedSettings["max_results"] = parseInteger(readValue(), flag.name, {
+          min: 1,
+          max: 20,
+        });
         break;
       case "--url":
       case "--urls":
@@ -327,7 +330,7 @@ Common options:
       --body <json|@file>        Base request JSON. CLI flags override matching fields.
       --max-chars-total <n>      Total excerpt character budget.
       --client-model <model>     Model that will consume the results.
-      --session-id <id>          Group related Search and Extract calls.
+      --session-id <id>          Reuse across related calls; use a new ID per task.
       --advanced-settings <json|@file>
                                   Raw advanced_settings object.
       --format <json|text|urls>  Output format. Default: json.
@@ -370,18 +373,18 @@ Usage:
   parallel-search --query "keyword query" --objective "Research goal"
 
 Search request options:
-      --objective <text>               Natural-language research goal. Positional text is used as objective.
+      --objective <text>               Self-contained natural-language research goal. Positional text is used as objective.
   -q, --query <query>                  Keyword search query. Repeatable. 3-6 words is recommended.
       --search-query <query>           Alias for --query.
-      --mode <mode>                    basic or advanced. Default API mode is advanced.
+      --mode <mode>                    turbo, basic, or advanced. Default API mode is advanced.
       --max-chars-total <n>            Total excerpt character budget.
       --client-model <model>           Model that will consume the results.
-      --session-id <id>                Group related calls.
+      --session-id <id>                Reuse across related calls; use a new ID per task.
       --body <json|@file>              Base search request JSON. CLI flags override matching fields.
 
-Advanced search settings:
+Advanced search settings (use only when required; restrictions can reduce result quality):
       --include-domain <domain[,..]>   Hard allow-list domains. Repeatable.
-      --exclude-domain <domain[,..]>   Exclude domains. Repeatable.
+      --exclude-domain <domain[,..]>   Exclude domains. Repeatable. Do not combine with include domains.
       --after-date <YYYY-MM-DD>        Freshness lower bound in source_policy.after_date.
       --source-policy <json|@file>     Raw advanced_settings.source_policy object.
       --max-age-seconds <n>            Fetch live when indexed content is older than n seconds. Minimum: 600.
@@ -390,8 +393,13 @@ Advanced search settings:
       --excerpt-max-chars-per-result <n>
                                       Excerpt budget per result.
       --location <cc>                  ISO 3166-1 alpha-2 search location, such as us, gb, de, jp.
-      --max-results <n>                Maximum number of results.
+      --max-results <n>                Maximum number of results. Range: 1-20.
       --advanced-settings <json|@file> Raw advanced_settings object.
+
+Guidance:
+  Provide a self-contained objective plus 2-3 diverse keyword queries that repeat the key topic.
+  Avoid sentences, instructions, and site: operators in queries. Prefer source guidance in the objective.
+  Start with basic for most workloads, turbo for simple latency-sensitive lookups, and advanced for depth.
 
 Output options:
       --format <json|text|urls>        Output format. Default: json.
@@ -575,33 +583,101 @@ function validateSearchRequest(request: Record<string, unknown>): void {
   }
 
   const settings = request["advanced_settings"];
-  if (settings["source_policy"] !== undefined) {
-    if (!isRecord(settings["source_policy"])) {
-      throw new CliError("advanced_settings.source_policy must be an object");
-    }
-
-    validateStringArray(
-      settings["source_policy"]["include_domains"],
-      "advanced_settings.source_policy.include_domains",
-    );
-    validateStringArray(
-      settings["source_policy"]["exclude_domains"],
-      "advanced_settings.source_policy.exclude_domains",
-    );
-    if (settings["source_policy"]["after_date"] !== undefined) {
-      assertStringValue(
-        settings["source_policy"]["after_date"],
-        "advanced_settings.source_policy.after_date",
-      );
-    }
-  }
+  validateSourcePolicy(settings["source_policy"]);
 
   if (settings["location"] !== undefined) {
     assertStringValue(settings["location"], "advanced_settings.location");
+    if (!/^[a-z]{2}$/i.test(settings["location"])) {
+      throw new CliError("advanced_settings.location must be an ISO 3166-1 alpha-2 country code");
+    }
   }
 
   if (settings["max_results"] !== undefined) {
-    assertIntegerValue(settings["max_results"], "advanced_settings.max_results", { min: 1 });
+    assertIntegerValue(settings["max_results"], "advanced_settings.max_results", {
+      min: 1,
+      max: 20,
+    });
+  }
+}
+
+function validateSourcePolicy(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (!isRecord(value)) {
+    throw new CliError("advanced_settings.source_policy must be an object");
+  }
+
+  const includeDomains = validateSourceDomains(
+    value["include_domains"],
+    "advanced_settings.source_policy.include_domains",
+  );
+  const excludeDomains = validateSourceDomains(
+    value["exclude_domains"],
+    "advanced_settings.source_policy.exclude_domains",
+  );
+
+  if (includeDomains.length > 0 && excludeDomains.length > 0) {
+    throw new CliError(
+      "Use either advanced_settings.source_policy.include_domains or advanced_settings.source_policy.exclude_domains, not both",
+    );
+  }
+
+  if (includeDomains.length + excludeDomains.length > 200) {
+    throw new CliError(
+      "advanced_settings.source_policy include_domains and exclude_domains may contain at most 200 domains combined",
+    );
+  }
+
+  if (value["after_date"] !== undefined) {
+    assertRfc3339Date(value["after_date"], "advanced_settings.source_policy.after_date");
+  }
+}
+
+function validateSourceDomains(value: unknown, field: string): string[] {
+  validateStringArray(value, field);
+  if (value === undefined) {
+    return [];
+  }
+
+  for (const domain of value) {
+    assertSourceDomain(domain, field);
+  }
+
+  return value;
+}
+
+function assertSourceDomain(value: string, field: string): void {
+  const bareExtension = value.startsWith(".");
+  const domain = bareExtension ? value.slice(1) : value;
+  const labels = domain.split(".");
+  const validLabels = labels.every((label) =>
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label),
+  );
+
+  if (
+    value !== value.trim() ||
+    domain.length === 0 ||
+    domain.length > 253 ||
+    (!bareExtension && labels.length < 2) ||
+    !validLabels
+  ) {
+    throw new CliError(
+      `${field} entries must be plain domains or bare extensions without schemes, paths, ports, or wildcards`,
+    );
+  }
+}
+
+function assertRfc3339Date(value: unknown, field: string): void {
+  assertStringValue(value, field);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new CliError(`${field} must be an RFC 3339 date in YYYY-MM-DD format`);
+  }
+
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw new CliError(`${field} must be a valid RFC 3339 date in YYYY-MM-DD format`);
   }
 }
 
@@ -1027,7 +1103,7 @@ function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
-function validateStringArray(value: unknown, field: string): void {
+function validateStringArray(value: unknown, field: string): asserts value is string[] | undefined {
   if (value === undefined) {
     return;
   }

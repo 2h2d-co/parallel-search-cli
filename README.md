@@ -32,38 +32,45 @@ You can also pass `--api-key`, or set `PARALLEL_BASE_URL` for testing against a 
 
 ## Search
 
-Parallel Search requires at least one `search_queries` entry. For best results, provide a self-contained `--objective` plus 2-3 concise keyword queries with `-q` / `--query`.
+Parallel Search requires at least one `search_queries` entry. For best results, provide a self-contained `--objective` plus 2-3 diverse keyword queries with `-q` / `--query`.
+
+Keep each query concise—roughly 3-6 words—and repeat the key entity or topic while varying names, synonyms, or angles. Avoid sentences, instructions, and `site:` operators; put broader context, freshness needs, and soft source preferences in the objective.
 
 ```bash
 parallel-search search \
   --objective "Find latest product announcements from Parallel Web Systems. Prefer official sources." \
   -q "Parallel Web Systems announcements" \
-  -q "Parallel Web Systems products"
+  -q "Parallel Web Systems products" \
+  -q "Parallel Web Systems benchmarks"
 ```
 
-Use `--mode basic` for lower latency or omit it for the API default `advanced` mode:
+Choose a mode based on the workload:
+
+- `turbo`: lowest latency and cost for simple, high-volume lookups; currently supports English and Japanese queries.
+- `basic`: recommended starting point for most applications and agent workloads.
+- `advanced`: highest-quality retrieval for complex or multi-hop work; this is the API default when `--mode` is omitted.
 
 ```bash
 parallel-search search \
-  --mode basic \
-  --objective "What are the latest advances in quantum error correction?" \
-  -q "quantum error correction 2026" \
-  -q "QEC algorithms"
+  --mode turbo \
+  --objective "What is the current price of NVIDIA stock?" \
+  -q "NVIDIA stock price" \
+  -q "NVDA quote today"
 ```
 
-Advanced Search settings are exposed as focused flags:
+Advanced Search settings are exposed as focused flags. Leave them unset unless they serve a specific product requirement because restrictive settings can reduce quality or increase latency:
 
 ```bash
 parallel-search search \
-  --objective "React performance guidance from official docs" \
-  -q "React memo docs" \
+  --objective "React performance guidance that must come exclusively from official React documentation" \
+  -q "React memo documentation" \
   -q "React useMemo guide" \
   --include-domain react.dev \
   --max-results 5 \
   --excerpt-max-chars-per-result 10000
 ```
 
-Source policy flags such as `--include-domain` are hard allow-lists. Prefer steering sources in the objective unless the task must only use specific domains.
+Source policy flags such as `--include-domain` are hard allow-lists. Prefer steering sources in the objective unless results must come exclusively from specific domains. Use either include or exclude domains, not both. Domains must omit schemes, paths, ports, and wildcard syntax; bare extensions such as `.gov` are accepted. Include and exclude lists have a combined limit of 200 domains.
 
 ## Extract
 
@@ -101,13 +108,15 @@ parallel-search extract \
 --advanced-settings <json|@file> Raw advanced_settings object.
 --max-chars-total <n>            Total excerpt character budget.
 --client-model <model>           Model that will consume the results.
---session-id <id>                Group related Search and Extract calls.
+--session-id <id>                Reuse across related calls; use a new ID per task.
 --format <json|text|urls>        Output format. Default: json.
 --compact                        Minify JSON output.
 --timeout <ms>                   Request timeout. Default: 60000.
 ```
 
 Default output is pretty JSON. Use `--format text`, `--format urls`, or `--compact`.
+
+Use a new `--session-id` for each logical task and reuse it across related Search and Extract calls. If you omit it, the API generates a `session_id` in the response that you can pass to subsequent calls.
 
 Run `parallel-search --help`, `parallel-search help search`, or `parallel-search help extract` for the full option list.
 
