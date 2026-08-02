@@ -1,5 +1,14 @@
 #!/usr/bin/env node
-import { apiJson, CliError, formatResponse, helpText, parseCli, VERSION } from "./core.ts";
+import {
+  apiJson,
+  CliError,
+  formatResponse,
+  helpText,
+  parseCli,
+  requestPreview,
+  VERSION,
+} from "./core.ts";
+import { requestSchema } from "./schema.ts";
 
 async function main(): Promise<void> {
   try {
@@ -15,10 +24,16 @@ async function main(): Promise<void> {
       return;
     }
 
-    const response = await apiJson(command.options);
-    process.stdout.write(
-      `${formatResponse(response, command.options.format, command.options.compact)}\n`,
-    );
+    if (command.kind === "schema") {
+      process.stdout.write(`${formatResponse(requestSchema(command.endpoint), "json", false)}\n`);
+      return;
+    }
+
+    const response = command.options.dryRun
+      ? requestPreview(command.options)
+      : await apiJson(command.options);
+    const format = command.options.dryRun ? "json" : command.options.format;
+    process.stdout.write(`${formatResponse(response, format, command.options.compact)}\n`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`parallel-search: ${message}\n`);

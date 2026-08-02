@@ -6,6 +6,17 @@ Current changes are tracked under `Unreleased`.
 
 ## Unreleased
 
+### Added
+
+- Dry-run request previews that validate and print the effective request without authentication or an API call.
+- Machine-readable JSON Schemas for Search and Extract request bodies.
+- Standard-input support for request bodies, JSON query arrays, and Search objectives.
+
+### Changed
+
+- Require an explicit `search` or `extract` command and reject unknown commands, help topics, and missing option values before making requests.
+- Treat singular query, URL, and domain flags as exact values; plural query and URL flags now accept JSON string arrays.
+
 ## [0.0.1] - 2026-08-02
 
 ### Added

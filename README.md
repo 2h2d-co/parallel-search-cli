@@ -30,6 +30,31 @@ export PARALLEL_API_KEY="your-api-key"
 
 You can also pass `--api-key`, or set `PARALLEL_BASE_URL` for testing against a compatible endpoint. The default base URL is `https://api.parallel.ai/v1`.
 
+## Machine-readable requests
+
+Use an explicit `search` or `extract` command. Singular `--query`, `--url`, `--include-domain`, and `--exclude-domain` flags accept one exact value and are repeatable. Use `--search-queries` and `--urls` for JSON string arrays.
+
+Pass request JSON inline, from a file with `@path`, or from standard input with `@-`. Focused flags override matching body fields:
+
+```bash
+parallel-search search --body @- --dry-run <<'JSON'
+{
+  "mode": "basic",
+  "objective": "Find current React rendering guidance from official documentation.",
+  "search_queries": ["React rendering performance", "React memo optimization"]
+}
+JSON
+```
+
+`--dry-run` validates and prints the effective method, URL, timeout, and request without requiring an API key or making a request. It never includes the API key. Long Search objectives can also be read from standard input by using `-` as the objective.
+
+Print the JSON Schema for either request body with:
+
+```bash
+parallel-search schema search
+parallel-search schema extract
+```
+
 ## Search
 
 Parallel Search requires at least one `search_queries` entry. For best results, provide a self-contained `--objective` plus 2-3 diverse keyword queries with `-q` / `--query`.
@@ -124,13 +149,14 @@ parallel-search extract \
 ## Shared options
 
 ```bash
---body <json|@file>              Base request JSON. CLI flags override matching fields.
+--body <json|@file|@->           Base request JSON. Use @- for stdin; flags override matching fields.
 --advanced-settings <json|@file> Raw advanced_settings object.
 --max-chars-total <n>            Total excerpt character budget.
 --client-model <model>           Model that will consume the results.
 --session-id <id>                Reuse across related calls; use a new ID per task.
 --format <json|text|urls>        Output format. Default: json.
 --compact                        Minify JSON output.
+--dry-run                        Print the effective request without authentication or an API call.
 --timeout <ms>                   Request timeout. Default: 60000.
 ```
 

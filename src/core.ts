@@ -10,6 +10,7 @@ export type OutputFormat = "json" | "text" | "urls";
 
 export type CliCommand =
   | { kind: "help"; endpoint?: ApiEndpoint }
+  | { endpoint: ApiEndpoint; kind: "schema" }
   | { kind: "version" }
   | {
       kind: "run";
@@ -18,9 +19,10 @@ export type CliCommand =
     };
 
 export type CliRunOptions = {
-  apiKey: string;
+  apiKey: string | undefined;
   baseUrl: string;
   compact: boolean;
+  dryRun: boolean;
   endpoint: ApiEndpoint;
   format: OutputFormat;
   request: Record<string, unknown>;
@@ -29,12 +31,17 @@ export type CliRunOptions = {
 
 type Environment = Record<string, string | undefined>;
 
+type CliIo = {
+  readStdin: () => string;
+};
+
 type ParseState = {
   advancedSettings: Record<string, unknown>;
   apiKey?: string;
   baseUrl?: string;
   bodyBase?: Record<string, unknown>;
   compact: boolean;
+  dryRun: boolean;
   endpoint: ApiEndpoint;
   excludeDomains: string[];
   format: OutputFormat;
@@ -49,39 +56,71 @@ type ParseState = {
 export class CliError extends Error {
   exitCode: number;
 
-  constructor(message: string, exitCode = 1) {
+  constructor(message: string, exitCode = 2) {
     super(message);
     this.name = "CliError";
     this.exitCode = exitCode;
   }
 }
 
-export function parseCli(argv: readonly string[], env: Environment = process.env): CliCommand {
-  if (argv.length === 0) {
+export function parseCli(
+  argv: readonly string[],
+  env: Environment = process.env,
+  io: CliIo = { readStdin: () => readFileSync(0, "utf8") },
+): CliCommand {
+  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
     return { kind: "help" };
+  }
+
+  if (argv[0] === "-V" || argv[0] === "--version") {
+    return { kind: "version" };
   }
 
   if (argv[0] === "help") {
     const topic = argv[1];
-    if (topic === "search" || topic === "extract") {
-      return { kind: "help", endpoint: topic };
+    if (topic === undefined) {
+      return { kind: "help" };
+    }
+    if ((topic === "search" || topic === "extract") && argv.length === 2) {
+      return { endpoint: topic, kind: "help" };
     }
 
-    return { kind: "help" };
+    throw new CliError(`Unknown help topic: ${topic}`);
   }
 
-  let endpoint: ApiEndpoint = "search";
-  let startIndex = 0;
-  let explicitEndpoint = false;
-  if (argv[0] === "search" || argv[0] === "extract") {
-    endpoint = argv[0];
-    startIndex = 1;
-    explicitEndpoint = true;
+  if (argv[0] === "schema") {
+    const endpoint = argv[1];
+    if ((endpoint === "search" || endpoint === "extract") && argv.length === 2) {
+      return { endpoint, kind: "schema" };
+    }
+
+    throw new CliError("Usage: parallel-search schema <search|extract>");
   }
+
+  const endpoint = argv[0];
+  if (endpoint !== "search" && endpoint !== "extract") {
+    throw new CliError(`Unknown command: ${endpoint}`);
+  }
+
+  let stdinConsumed = false;
+  const readStdin = (flag: string): string => {
+    if (stdinConsumed) {
+      throw new CliError(`Standard input can only be read once; ${flag} also requested it`);
+    }
+
+    stdinConsumed = true;
+    try {
+      return io.readStdin();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new CliError(`Could not read ${flag} from standard input: ${reason}`);
+    }
+  };
 
   const state: ParseState = {
     advancedSettings: {},
     compact: false,
+    dryRun: false,
     endpoint,
     excludeDomains: [],
     format: "json",
@@ -93,7 +132,7 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
     urls: [],
   };
 
-  for (let index = startIndex; index < argv.length; index += 1) {
+  for (let index = 1; index < argv.length; index += 1) {
     const current = argv[index];
     if (current === undefined) {
       continue;
@@ -112,21 +151,23 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
       if (state.endpoint === "extract") {
         state.urls.push(current);
       } else {
-        state.positional.push(current);
+        state.positional.push(current === "-" ? readStdin("objective").trim() : current);
       }
       continue;
     }
 
     const flag = splitFlag(current);
-    const readValue = (): string => {
+    const readValue = (allowDash = false): string => {
       if (flag.inlineValue !== undefined) {
         return flag.inlineValue;
       }
 
       index += 1;
       const value = argv[index];
-      if (value === undefined) {
-        throw new CliError(`${flag.name} requires a value`);
+      if (value === undefined || (value.startsWith("-") && !(allowDash && value === "-"))) {
+        throw new CliError(
+          `${flag.name} requires a value; use ${flag.name}=<value> when the value starts with "-"`,
+        );
       }
 
       return value;
@@ -135,7 +176,7 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
     switch (flag.name) {
       case "-h":
       case "--help":
-        return explicitEndpoint ? { kind: "help", endpoint } : { kind: "help" };
+        return { endpoint, kind: "help" };
       case "-V":
       case "--version":
         return { kind: "version" };
@@ -146,27 +187,37 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         state.baseUrl = readValue();
         break;
       case "--body":
-        state.bodyBase = parseJsonObject(readValue(), flag.name);
+        state.bodyBase = parseJsonObject(readValue(), flag.name, readStdin);
         break;
-      case "--objective":
-        state.generated["objective"] = readValue();
+      case "--objective": {
+        const value = readValue(true);
+        state.generated["objective"] = value === "-" ? readStdin(flag.name).trim() : value;
         break;
+      }
       case "-q":
       case "--query":
       case "--search-query":
+        state.searchQueries.push(readValue());
+        break;
       case "--search-queries":
-        state.searchQueries.push(...parseList(readValue()));
+        state.searchQueries.push(...parseJsonStringArray(readValue(), flag.name, readStdin));
         break;
       case "--mode":
         ensureEndpoint(state.endpoint, "search", flag.name);
         state.generated["mode"] = parseAllowed(readValue(), flag.name, SEARCH_MODES);
         break;
       case "--include-domain":
+        ensureEndpoint(state.endpoint, "search", flag.name);
+        state.includeDomains.push(readValue());
+        break;
       case "--include-domains":
         ensureEndpoint(state.endpoint, "search", flag.name);
         state.includeDomains.push(...parseList(readValue()));
         break;
       case "--exclude-domain":
+        ensureEndpoint(state.endpoint, "search", flag.name);
+        state.excludeDomains.push(readValue());
+        break;
       case "--exclude-domains":
         ensureEndpoint(state.endpoint, "search", flag.name);
         state.excludeDomains.push(...parseList(readValue()));
@@ -175,7 +226,7 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         ensureEndpoint(state.endpoint, "search", flag.name);
         state.advancedSettings["source_policy"] = mergeObjects(
           getRecord(state.advancedSettings["source_policy"]),
-          parseJsonObject(readValue(), flag.name),
+          parseJsonObject(readValue(), flag.name, readStdin),
         );
         break;
       case "--after-date":
@@ -197,9 +248,12 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         });
         break;
       case "--url":
+        ensureEndpoint(state.endpoint, "extract", flag.name);
+        state.urls.push(readValue());
+        break;
       case "--urls":
         ensureEndpoint(state.endpoint, "extract", flag.name);
-        state.urls.push(...parseList(readValue()));
+        state.urls.push(...parseJsonStringArray(readValue(), flag.name, readStdin));
         break;
       case "--full-content":
         ensureEndpoint(state.endpoint, "extract", flag.name);
@@ -213,7 +267,7 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         ensureEndpoint(state.endpoint, "extract", flag.name);
         state.advancedSettings["full_content"] = mergeObjects(
           getRecord(state.advancedSettings["full_content"]),
-          parseJsonObject(readValue(), flag.name),
+          parseJsonObject(readValue(), flag.name, readStdin),
         );
         break;
       case "--full-content-max-chars":
@@ -236,13 +290,13 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
       case "--advanced-settings":
         state.advancedSettings = mergeObjects(
           state.advancedSettings,
-          parseJsonObject(readValue(), flag.name),
+          parseJsonObject(readValue(), flag.name, readStdin),
         );
         break;
       case "--fetch-policy":
         state.advancedSettings["fetch_policy"] = mergeObjects(
           getRecord(state.advancedSettings["fetch_policy"]),
-          parseJsonObject(readValue(), flag.name),
+          parseJsonObject(readValue(), flag.name, readStdin),
         );
         break;
       case "--max-age-seconds":
@@ -273,7 +327,7 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
       case "--excerpt-settings":
         state.advancedSettings["excerpt_settings"] = mergeObjects(
           getRecord(state.advancedSettings["excerpt_settings"]),
-          parseJsonObject(readValue(), flag.name),
+          parseJsonObject(readValue(), flag.name, readStdin),
         );
         break;
       case "--excerpt-max-chars":
@@ -291,6 +345,9 @@ export function parseCli(argv: readonly string[], env: Environment = process.env
         break;
       case "--compact":
         state.compact = true;
+        break;
+      case "--dry-run":
+        state.dryRun = true;
         break;
       case "--timeout":
       case "--timeout-ms":
@@ -318,16 +375,17 @@ export function helpText(endpoint?: ApiEndpoint): string {
 Usage:
   parallel-search search [options] --query "Parallel docs" --objective "Find official docs"
   parallel-search extract [options] --url https://example.com --objective "Find pricing details"
-  parallel-search [search options]
+  parallel-search schema <search|extract>
 
 Commands:
   search                         Search the web and return LLM-optimized excerpts.
   extract                        Extract focused markdown from public URLs.
+  schema                         Print the JSON Schema for a request body.
 
 Common options:
       --api-key <key>            Defaults to PARALLEL_API_KEY.
       --base-url <url>           Defaults to PARALLEL_BASE_URL or https://api.parallel.ai/v1.
-      --body <json|@file>        Base request JSON. CLI flags override matching fields.
+      --body <json|@file|@->     Base request JSON. Use @- for stdin; flags override matching fields.
       --max-chars-total <n>      Total excerpt character budget.
       --client-model <model>     Model that will consume the results.
       --session-id <id>          Reuse across related calls; use a new ID per task.
@@ -336,6 +394,7 @@ Common options:
       --format <json|text|urls>  Output format. Default: json.
       --json                     Alias for --format json.
       --compact                  Minify JSON output.
+      --dry-run                  Print the effective request as JSON without authenticating or calling the API.
       --timeout <ms>             Request timeout. Default: 60000.
   -h, --help                     Show help.
   -V, --version                  Show version.
@@ -345,8 +404,22 @@ Run "parallel-search help search" or "parallel-search help extract" for command-
 }
 
 export async function apiJson(options: CliRunOptions): Promise<unknown> {
-  const response = await postApi(options);
+  if (options.apiKey === undefined || options.apiKey.trim() === "") {
+    throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.", 3);
+  }
+
+  const response = await postApi({ ...options, apiKey: options.apiKey });
   return response.json();
+}
+
+export function requestPreview(options: CliRunOptions): Record<string, unknown> {
+  return {
+    endpoint: options.endpoint,
+    method: "POST",
+    request: options.request,
+    timeout_ms: options.timeoutMs,
+    url: apiUrl(options.baseUrl, options.endpoint),
+  };
 }
 
 export function formatResponse(response: unknown, format: OutputFormat, compact: boolean): string {
@@ -370,21 +443,25 @@ function searchHelpText(): string {
 
 Usage:
   parallel-search search [options] --query "keyword query" --objective "Research goal"
-  parallel-search --query "keyword query" --objective "Research goal"
+  parallel-search search [options] "Research goal" --query "keyword query"
+  printf '%s' "Research goal" | parallel-search search - --query "keyword query"
 
 Search request options:
-      --objective <text>               Self-contained natural-language research goal. Positional text is used as objective.
-  -q, --query <query>                  Keyword search query. Repeatable. 3-6 words is recommended.
+      --objective <text|->             Self-contained goal. Use - to read it from stdin; positional text is also accepted.
+  -q, --query <query>                  One exact keyword query. Repeatable. 3-6 words is recommended.
       --search-query <query>           Alias for --query.
+      --search-queries <json|@file|@-> JSON string array. Use @- for stdin.
       --mode <mode>                    turbo, basic, or advanced. Default API mode is advanced.
       --max-chars-total <n>            Total excerpt character budget.
       --client-model <model>           Model that will consume the results.
       --session-id <id>                Reuse across related calls; use a new ID per task.
-      --body <json|@file>              Base search request JSON. CLI flags override matching fields.
+      --body <json|@file|@->           Base search request JSON. Use @- for stdin; flags override matching fields.
 
 Advanced search settings (use only when required; restrictions can reduce result quality):
-      --include-domain <domain[,..]>   Hard allow-list domains. Repeatable.
-      --exclude-domain <domain[,..]>   Exclude domains. Repeatable. Do not combine with include domains.
+      --include-domain <domain>        One hard allow-list domain. Repeatable.
+      --include-domains <domain[,..]>  Comma-separated hard allow-list domains.
+      --exclude-domain <domain>        One excluded domain. Repeatable. Do not combine with include domains.
+      --exclude-domains <domain[,..]>  Comma-separated excluded domains.
       --after-date <YYYY-MM-DD>        Freshness lower bound in source_policy.after_date.
       --source-policy <json|@file>     Raw advanced_settings.source_policy object.
       --max-age-seconds <n>            Fetch live when indexed content is older than n seconds. Minimum: 600.
@@ -405,6 +482,7 @@ Output options:
       --format <json|text|urls>        Output format. Default: json.
       --json                           Alias for --format json.
       --compact                        Minify JSON output.
+      --dry-run                        Print the effective request as JSON without an API call.
       --timeout <ms>                   Request timeout. Default: 60000.
       --api-key <key>                  Defaults to PARALLEL_API_KEY.
       --base-url <url>                 Defaults to PARALLEL_BASE_URL or https://api.parallel.ai/v1.
@@ -426,14 +504,15 @@ Usage:
   parallel-search extract --url https://example.com --objective "Find pricing details"
 
 Extract request options:
-      --url <url[,..]>                 URL to extract. Repeatable; up to 20 positional or flag URLs.
+      --url <url>                      One exact URL. Repeatable; up to 20 positional or flag URLs.
+      --urls <json|@file|@->           JSON string array of URLs. Use @- for stdin.
       --objective <text>               Self-contained, specific extraction goal.
   -q, --query <query>                  Keyword query to focus extraction. Repeatable; 2-3 is recommended.
       --search-query <query>           Alias for --query.
       --max-chars-total <n>            Total excerpt budget; does not affect full content.
       --client-model <model>           Model that will consume the results.
       --session-id <id>                Reuse across related calls; use a new ID per task.
-      --body <json|@file>              Base extract request JSON. CLI flags override matching fields.
+      --body <json|@file|@->           Base extract request JSON. Use @- for stdin; flags override matching fields.
 
 Advanced extract settings (usually omit; live fetch and full content can increase latency):
       --fetch-policy <json|@file>      Raw advanced_settings.fetch_policy object.
@@ -462,6 +541,7 @@ Output options:
       --format <json|text|urls>        Output format. Default: json.
       --json                           Alias for --format json.
       --compact                        Minify JSON output.
+      --dry-run                        Print the effective request as JSON without an API call.
       --timeout <ms>                   Request timeout. Default: 60000.
       --api-key <key>                  Defaults to PARALLEL_API_KEY.
       --base-url <url>                 Defaults to PARALLEL_BASE_URL or https://api.parallel.ai/v1.
@@ -515,11 +595,16 @@ function buildCommand(state: ParseState, env: Environment): CliCommand {
   validateRequest(state.endpoint, request);
 
   const apiKey = state.apiKey ?? env["PARALLEL_API_KEY"];
-  if (apiKey === undefined || apiKey.trim() === "") {
-    throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.");
+  if (!state.dryRun && (apiKey === undefined || apiKey.trim() === "")) {
+    throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.", 3);
   }
 
   const baseUrl = state.baseUrl ?? env["PARALLEL_BASE_URL"] ?? "https://api.parallel.ai/v1";
+  try {
+    apiUrl(baseUrl, state.endpoint);
+  } catch {
+    throw new CliError("--base-url must be a valid URL");
+  }
 
   return {
     endpoint: state.endpoint,
@@ -528,6 +613,7 @@ function buildCommand(state: ParseState, env: Environment): CliCommand {
       apiKey,
       baseUrl,
       compact: state.compact,
+      dryRun: state.dryRun,
       endpoint: state.endpoint,
       format: state.format,
       request,
@@ -810,7 +896,7 @@ function validateExcerptSettings(value: unknown): void {
   }
 }
 
-async function postApi(options: CliRunOptions): Promise<Response> {
+async function postApi(options: CliRunOptions & { apiKey: string }): Promise<Response> {
   const response = await fetch(apiUrl(options.baseUrl, options.endpoint), {
     body: JSON.stringify(options.request),
     headers: {
@@ -972,8 +1058,14 @@ function ensureEndpoint(actual: ApiEndpoint, expected: ApiEndpoint, flag: string
   }
 }
 
-function parseJsonObject(value: string, flag: string): Record<string, unknown> {
-  const parsed = parseJsonOrFile(value, flag);
+type StdinReader = (flag: string) => string;
+
+function parseJsonObject(
+  value: string,
+  flag: string,
+  readStdin: StdinReader,
+): Record<string, unknown> {
+  const parsed = parseJsonOrFile(value, flag, readStdin);
   if (!isRecord(parsed)) {
     throw new CliError(`${flag} must be a JSON object`);
   }
@@ -981,8 +1073,14 @@ function parseJsonObject(value: string, flag: string): Record<string, unknown> {
   return parsed;
 }
 
-function parseJsonOrFile(value: string, flag: string): unknown {
-  const source = value.startsWith("@") ? readJsonFile(value.slice(1), flag) : value;
+function parseJsonStringArray(value: string, flag: string, readStdin: StdinReader): string[] {
+  const parsed = parseJsonOrFile(value, flag, readStdin);
+  validateStringArray(parsed, flag);
+  return parsed ?? [];
+}
+
+function parseJsonOrFile(value: string, flag: string, readStdin: StdinReader): unknown {
+  const source = value.startsWith("@") ? readJsonFile(value.slice(1), flag, readStdin) : value;
 
   try {
     return JSON.parse(source) as unknown;
@@ -992,9 +1090,13 @@ function parseJsonOrFile(value: string, flag: string): unknown {
   }
 }
 
-function readJsonFile(path: string, flag: string): string {
+function readJsonFile(path: string, flag: string, readStdin: StdinReader): string {
+  if (path === "-") {
+    return readStdin(flag);
+  }
+
   try {
-    return readFileSync(path === "-" ? 0 : path, "utf8");
+    return readFileSync(path, "utf8");
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new CliError(`Could not read ${flag} file ${path}: ${reason}`);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CliError, formatResponse, helpText, parseCli } from "../src/core.ts";
+import { CliError, formatResponse, helpText, parseCli, requestPreview } from "../src/core.ts";
+import { requestSchema } from "../src/schema.ts";
 
 const env = { PARALLEL_API_KEY: "test-key" };
 
@@ -19,7 +20,9 @@ void test("builds a search request with objective, queries, and advanced setting
       "--max-results",
       "5",
       "--include-domain",
-      "parallel.ai,docs.parallel.ai",
+      "parallel.ai",
+      "--include-domain",
+      "docs.parallel.ai",
     ],
     env,
   );
@@ -60,6 +63,129 @@ void test("supports Turbo Search mode through flags and base request bodies", ()
   if (fromBody.kind === "run") {
     assert.equal(fromBody.options.request["mode"], "turbo");
   }
+});
+
+void test("requires explicit commands and rejects missing option values", () => {
+  assert.throws(
+    () => parseCli(["searhc", "--query", "Parallel Search API"], env),
+    (error: unknown) => error instanceof CliError && error.message.includes("Unknown command"),
+  );
+  assert.throws(
+    () => parseCli(["help", "unknown"], env),
+    (error: unknown) => error instanceof CliError && error.message.includes("Unknown help topic"),
+  );
+  assert.throws(
+    () => parseCli(["search", "--query", "--mode", "basic"], env),
+    (error: unknown) => error instanceof CliError && error.message.includes("requires a value"),
+  );
+});
+
+void test("preserves exact singular query and URL values", () => {
+  const search = parseCli(["search", "-q", "Federal Reserve, SEC guidance"], env);
+  assert.equal(search.kind, "run");
+  if (search.kind === "run") {
+    assert.deepEqual(search.options.request["search_queries"], ["Federal Reserve, SEC guidance"]);
+  }
+
+  const extract = parseCli(["extract", "--url", "https://example.com/reports/a,b"], env);
+  assert.equal(extract.kind, "run");
+  if (extract.kind === "run") {
+    assert.deepEqual(extract.options.request["urls"], ["https://example.com/reports/a,b"]);
+  }
+});
+
+void test("accepts plural JSON arrays and standard input", () => {
+  const command = parseCli(
+    [
+      "search",
+      "-",
+      "--search-queries",
+      '["Parallel Search API","Parallel Web products"]',
+      "--dry-run",
+    ],
+    {},
+    { readStdin: () => "Find current Parallel Web product information.\n" },
+  );
+  assert.equal(command.kind, "run");
+  if (command.kind !== "run") {
+    return;
+  }
+
+  assert.equal(command.options.apiKey, undefined);
+  assert.equal(command.options.dryRun, true);
+  assert.deepEqual(command.options.request, {
+    objective: "Find current Parallel Web product information.",
+    search_queries: ["Parallel Search API", "Parallel Web products"],
+  });
+
+  const extract = parseCli(
+    ["extract", "--urls", '["https://example.com/a","https://example.com/b"]'],
+    env,
+  );
+  assert.equal(extract.kind, "run");
+  if (extract.kind === "run") {
+    assert.deepEqual(extract.options.request["urls"], [
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
+  }
+});
+
+void test("reads request bodies from standard input once", () => {
+  const body = '{"mode":"basic","search_queries":["Parallel Search API"]}';
+  const command = parseCli(
+    ["search", "--body", "@-", "--dry-run"],
+    {},
+    {
+      readStdin: () => body,
+    },
+  );
+  assert.equal(command.kind, "run");
+  if (command.kind === "run") {
+    assert.deepEqual(command.options.request, JSON.parse(body));
+  }
+
+  assert.throws(
+    () =>
+      parseCli(
+        ["search", "--body", "@-", "--objective", "-", "--dry-run"],
+        {},
+        {
+          readStdin: () => body,
+        },
+      ),
+    (error: unknown) => error instanceof CliError && error.message.includes("only be read once"),
+  );
+});
+
+void test("builds redacted dry-run previews without authentication", () => {
+  const command = parseCli(
+    ["search", "--query", "Parallel Search API", "--api-key", "secret", "--dry-run"],
+    {},
+  );
+  assert.equal(command.kind, "run");
+  if (command.kind !== "run") {
+    return;
+  }
+
+  const preview = requestPreview(command.options);
+  assert.deepEqual(preview, {
+    endpoint: "search",
+    method: "POST",
+    request: { search_queries: ["Parallel Search API"] },
+    timeout_ms: 60_000,
+    url: "https://api.parallel.ai/v1/search",
+  });
+  assert.doesNotMatch(JSON.stringify(preview), /secret/);
+});
+
+void test("exposes machine-readable request schemas", () => {
+  assert.deepEqual(parseCli(["schema", "search"], {}), {
+    endpoint: "search",
+    kind: "schema",
+  });
+  assert.deepEqual(requestSchema("search")["required"], ["search_queries"]);
+  assert.deepEqual(requestSchema("extract")["required"], ["urls"]);
 });
 
 void test("documents current Search modes and query guidance", () => {
@@ -212,7 +338,9 @@ void test("accepts documented source-policy domain and date forms", () => {
       "-q",
       "government climate guidance",
       "--include-domain",
-      "example.gov,.gov",
+      "example.gov",
+      "--include-domain",
+      ".gov",
       "--after-date",
       "2026-01-31",
       "--max-results",
