@@ -228,7 +228,7 @@ PARALLEL_API_KEY="..." npm run test:integration
 
 The integration command first runs the complete deterministic suite, then builds and unpacks the same temporary npm artifact for real requests to `https://api.parallel.ai/v1`. Live coverage includes every Search mode, focused and whole-page Extract, batch Extract, full content, advanced settings, all output formats, session reuse, authentication, API validation, timeout, network, partial Extract, and output-file contracts. It fails rather than skipping when `PARALLEL_API_KEY` is missing. The GitHub `Live API integration` workflow provides the same suite as a manual, protected-environment check.
 
-Stable and prerelease `v<version>` tags trigger the shared CI release flow. CI validates, tests, builds, previews, and stages the package on npm with provenance. Stable versions use `latest`; prereleases derive their npm dist-tag from the first prerelease identifier.
+Stable and prerelease `v<version>` tags trigger the shared CI release flow. CI validates, tests, builds, previews, and stages the package on npm with provenance. Stable versions use `latest`; prereleases derive their npm dist-tag from the first prerelease identifier. Release tags must be lightweight tags. Create one with `git tag v<version>`; do not use `git tag -a`, `git tag -s`, `git tag -m`, or `cog bump --annotated`.
 
 The project uses `oxfmt`, `oxlint`, TypeScript 7 with `erasableSyntaxOnly`, and publishes compiled JavaScript without install/postinstall scripts.
 
