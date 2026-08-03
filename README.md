@@ -57,33 +57,30 @@ parallel-search schema extract
 
 ## Reliable output and errors
 
-Use `-o` / `--output` to keep large payloads out of harness stdout. The CLI writes the selected output format atomically with mode `0600`, refuses to replace an existing file, and prints a compact JSON receipt containing the absolute path and byte count:
+Use `--temp-output` to keep large payloads out of harness stdout without choosing a path. The CLI creates a private directory in the system temporary location, writes the response with mode `0600`, and prints only the absolute path:
 
 ```bash
-tmpdir="$(mktemp -d)"
 parallel-search search \
-  --mode basic \
   --objective "Find current Parallel Search API guidance" \
   -q "Parallel Search API" \
-  --max-chars-total 27000 \
-  --compact \
-  --json-errors \
-  --output "$tmpdir/search.json"
+  --temp-output
 ```
 
-Use `--json-errors` or `--error-format json` for a stable error object on stderr. API errors include the HTTP status, reference ID, and structured detail when available.
+Temporary output directories use mode `0700` and persist after the command exits so the caller can read them. For a caller-selected destination, use `-o` / `--output`. Explicit output is written atomically, never replaces an existing file, and returns a compact JSON receipt containing the absolute path and byte count.
 
-| Exit code | Meaning                                        |
-| --------- | ---------------------------------------------- |
-| 0         | Success                                        |
-| 2         | Invalid command or request input               |
-| 3         | Missing or invalid authentication              |
-| 4         | API error                                      |
-| 5         | Network failure or timeout                     |
-| 6         | Per-URL Extract errors with `--fail-on-errors` |
-| 7         | Output file error                              |
+Errors default to readable text in an interactive terminal and stable JSON otherwise. Use `--error-format text`, `--error-format json`, or `--json-errors` to choose explicitly. API errors include the HTTP status, reference ID, and structured detail when available.
 
-Extract may return successful HTTP responses containing per-URL `errors`. Pass `--fail-on-errors` to preserve the response while exiting with code 6 when any requested URL fails.
+| Exit code | Meaning                           |
+| --------- | --------------------------------- |
+| 0         | Success                           |
+| 2         | Invalid command or request input  |
+| 3         | Missing or invalid authentication |
+| 4         | API error                         |
+| 5         | Network failure or timeout        |
+| 6         | Per-URL Extract errors            |
+| 7         | Output file error                 |
+
+Extract may return successful HTTP responses containing per-URL `errors`. The CLI preserves the response and exits with code 6 by default when any requested URL fails. Use `--allow-partial` only when per-URL failures should still exit successfully.
 
 ## Agent Skill
 
@@ -93,7 +90,7 @@ The repository and npm package ship an Agent Skill—a declarative instruction f
 npx skills add 2h2d-co/parallel-search-cli --skill parallel-search-cli
 ```
 
-The skill uses explicit Basic mode and a 27,000-character Search budget for normal agent loops, saves authoritative JSON to a unique temporary file, checks Extract partial failures, requires citations, and treats retrieved web content as untrusted data. The source is at [`skills/parallel-search-cli/SKILL.md`](skills/parallel-search-cli/SKILL.md).
+The skill relies on the CLI's bounded Basic-mode defaults, saves authoritative JSON with `--temp-output`, checks Extract partial failures, requires citations, and treats retrieved web content as untrusted data. The source is at [`skills/parallel-search-cli/SKILL.md`](skills/parallel-search-cli/SKILL.md).
 
 ## Search
 
@@ -109,11 +106,11 @@ parallel-search search \
   -q "Parallel Web Systems benchmarks"
 ```
 
-Choose a mode based on the workload:
+Search defaults to Basic mode and a 27,000-character total excerpt budget. Choose another mode when the workload requires it:
 
 - `turbo`: lowest latency and cost for simple, high-volume lookups; currently supports English and Japanese queries.
 - `basic`: recommended starting point for most applications and agent workloads.
-- `advanced`: highest-quality retrieval for complex or multi-hop work; this is the API default when `--mode` is omitted.
+- `advanced`: highest-quality retrieval for complex or multi-hop work.
 
 ```bash
 parallel-search search \
@@ -153,7 +150,6 @@ A common workflow is to Search first, select the most relevant URLs, and then Ex
 
 ```bash
 parallel-search search \
-  --mode basic \
   --objective "Find official React documentation about preventing unnecessary renders" \
   -q "React memo optimization" \
   -q "React rendering performance" \
@@ -167,13 +163,13 @@ parallel-search extract \
   -q "React useMemo guidance"
 ```
 
-Full content is disabled by default. Enabling it returns both focused excerpts and full content beginning at the start of each page. Cap full content separately because top-level `--max-chars-total` affects only excerpts. Request full content only when excerpts are insufficient; without an objective or queries it is redundant with whole-page excerpts and may produce an API warning.
+Full content is disabled by default. `--full-content` returns both focused excerpts and content beginning at the start of each page, capped at 50,000 characters per result. Override that cap with `--full-content-max-chars-per-result`. Top-level `--max-chars-total` affects only excerpts. Request full content only when excerpts are insufficient; without an objective or queries it is redundant with whole-page excerpts and may produce an API warning.
 
 ```bash
 parallel-search extract \
   --url https://example.com/report.pdf \
   --objective "Extract methodology and headline findings" \
-  --full-content-max-chars-per-result 50000
+  --full-content
 ```
 
 Leave advanced settings unset unless the task requires them. Live fetching can substantially increase latency and is subject to source-site rate limits. Cache fallback remains enabled by default; use `--disable-cache-fallback` only for fresh-or-fail tasks.
@@ -191,19 +187,22 @@ parallel-search extract \
 ```bash
 --body <json|@file|@->           Base request JSON. Use @- for stdin; flags override matching fields.
 --advanced-settings <json|@file> Raw advanced_settings object.
---max-chars-total <n>            Total excerpt character budget.
+--max-chars-total <n>            Total excerpt character budget. Default: 27000.
 --client-model <model>           Model that will consume the results.
 --session-id <id>                Reuse across related calls; use a new ID per task.
 --format <json|text|urls>        Output format. Default: json.
---compact                        Minify JSON output.
+--compact                        Minify JSON output; automatic for files and non-interactive stdout.
+--pretty                         Pretty-print JSON output; automatic in an interactive terminal.
 -o, --output <path>              Atomically write output without replacing an existing file.
---error-format <text|json>       Error format on stderr. Default: text.
+--temp-output                    Write to a private temporary file and print its absolute path.
+--error-format <text|json>       Default: text interactively, json otherwise.
 --json-errors                    Alias for --error-format json.
+--allow-partial                  Exit 0 when Extract reports per-URL errors.
 --dry-run                        Print the effective request without authentication or an API call.
 --timeout <ms>                   Request timeout. Default: 60000.
 ```
 
-Default output is pretty JSON. Use `--format text`, `--format urls`, or `--compact`.
+Default output is JSON: pretty in an interactive terminal and compact in files or non-interactive output. Use `--format text`, `--format urls`, `--pretty`, or `--compact` to override presentation.
 
 Use a new `--session-id` for each logical task and reuse it across related Search and Extract calls. If you omit it, the API generates a `session_id` in the response that you can pass to subsequent calls.
 

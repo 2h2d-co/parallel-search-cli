@@ -5,6 +5,8 @@ export const VERSION = "0.0.2";
 const SEARCH_MODES = ["turbo", "basic", "advanced"];
 const OUTPUT_FORMATS = ["json", "text", "urls"];
 const ERROR_FORMATS = ["text", "json"];
+const DEFAULT_MAX_CHARS_TOTAL = 27_000;
+const DEFAULT_FULL_CONTENT_MAX_CHARS_PER_RESULT = 50_000;
 
 export type ApiEndpoint = "search" | "extract";
 export type ErrorFormat = "text" | "json";
@@ -32,13 +34,14 @@ export type CliCommand =
 export type CliRunOptions = {
   apiKey: string | undefined;
   baseUrl: string;
-  compact: boolean;
+  compact: boolean | undefined;
   dryRun: boolean;
   endpoint: ApiEndpoint;
   failOnErrors: boolean;
   format: OutputFormat;
   outputPath: string | undefined;
   request: Record<string, unknown>;
+  temporaryOutput: boolean;
   timeoutMs: number;
 };
 
@@ -53,7 +56,7 @@ type ParseState = {
   apiKey?: string;
   baseUrl?: string;
   bodyBase?: Record<string, unknown>;
-  compact: boolean;
+  compact: boolean | undefined;
   dryRun: boolean;
   endpoint: ApiEndpoint;
   excludeDomains: string[];
@@ -64,6 +67,7 @@ type ParseState = {
   outputPath?: string;
   positional: string[];
   searchQueries: string[];
+  temporaryOutput: boolean;
   timeoutMs: number;
   urls: string[];
 };
@@ -160,16 +164,17 @@ export function parseCli(
 
   const state: ParseState = {
     advancedSettings: {},
-    compact: false,
+    compact: undefined,
     dryRun: false,
     endpoint,
     excludeDomains: [],
-    failOnErrors: false,
+    failOnErrors: endpoint === "extract",
     format: "json",
     generated: {},
     includeDomains: [],
     positional: [],
     searchQueries: [],
+    temporaryOutput: false,
     timeoutMs: 60_000,
     urls: [],
   };
@@ -299,7 +304,9 @@ export function parseCli(
         break;
       case "--full-content":
         ensureEndpoint(state.endpoint, "extract", flag.name);
-        state.advancedSettings["full_content"] = true;
+        state.advancedSettings["full_content"] = {
+          max_chars_per_result: DEFAULT_FULL_CONTENT_MAX_CHARS_PER_RESULT,
+        };
         break;
       case "--no-full-content":
         ensureEndpoint(state.endpoint, "extract", flag.name);
@@ -394,8 +401,14 @@ export function parseCli(
       case "--output":
         state.outputPath = readValue();
         break;
+      case "--temp-output":
+        state.temporaryOutput = true;
+        break;
       case "--compact":
         state.compact = true;
+        break;
+      case "--pretty":
+        state.compact = false;
         break;
       case "--dry-run":
         state.dryRun = true;
@@ -403,6 +416,10 @@ export function parseCli(
       case "--fail-on-errors":
         ensureEndpoint(state.endpoint, "extract", flag.name);
         state.failOnErrors = true;
+        break;
+      case "--allow-partial":
+        ensureEndpoint(state.endpoint, "extract", flag.name);
+        state.failOnErrors = false;
         break;
       case "--timeout":
       case "--timeout-ms":
@@ -441,16 +458,18 @@ Common options:
       --api-key <key>            Defaults to PARALLEL_API_KEY.
       --base-url <url>           Defaults to PARALLEL_BASE_URL or https://api.parallel.ai/v1.
       --body <json|@file|@->     Base request JSON. Use @- for stdin; flags override matching fields.
-      --max-chars-total <n>      Total excerpt character budget.
+      --max-chars-total <n>      Total excerpt character budget. Default: 27000.
       --client-model <model>     Model that will consume the results.
       --session-id <id>          Reuse across related calls; use a new ID per task.
       --advanced-settings <json|@file>
                                   Raw advanced_settings object.
       --format <json|text|urls>  Output format. Default: json.
       --json                     Alias for --format json.
-      --compact                  Minify JSON output.
+      --compact                  Minify JSON output. Default for files and non-interactive stdout.
+      --pretty                   Pretty-print JSON output. Default in an interactive terminal.
   -o, --output <path>            Atomically write output; refuses to replace an existing file.
-      --error-format <text|json> Error format on stderr. Default: text.
+      --temp-output              Write to a private temporary file and print only its absolute path.
+      --error-format <text|json> Error format on stderr. Default: text interactively, json otherwise.
       --json-errors              Alias for --error-format json.
       --dry-run                  Print the effective request as JSON without authenticating or calling the API.
       --timeout <ms>             Request timeout. Default: 60000.
@@ -458,7 +477,7 @@ Common options:
   -V, --version                  Show version.
 
 Exit codes: 0 success, 2 usage, 3 authentication, 4 API, 5 network/timeout,
-6 strict Extract partial failure, 7 output file.
+6 Extract partial failure, 7 output file.
 
 Run "parallel-search help search" or "parallel-search help extract" for command-specific options.
 `;
@@ -508,8 +527,11 @@ export function formatResponse(response: unknown, format: OutputFormat, compact:
   }
 }
 
-export function errorFormatFromArgv(argv: readonly string[]): ErrorFormat {
-  let format: ErrorFormat = "text";
+export function errorFormatFromArgv(
+  argv: readonly string[],
+  defaultFormat: ErrorFormat = "text",
+): ErrorFormat {
+  let format = defaultFormat;
 
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
@@ -585,8 +607,8 @@ Search request options:
   -q, --query <query>                  One exact keyword query. Repeatable. 3-6 words is recommended.
       --search-query <query>           Alias for --query.
       --search-queries <json|@file|@-> JSON string array. Use @- for stdin.
-      --mode <mode>                    turbo, basic, or advanced. Default API mode is advanced.
-      --max-chars-total <n>            Total excerpt character budget.
+      --mode <mode>                    turbo, basic, or advanced. Default: basic.
+      --max-chars-total <n>            Total excerpt character budget. Default: 27000.
       --client-model <model>           Model that will consume the results.
       --session-id <id>                Reuse across related calls; use a new ID per task.
       --body <json|@file|@->           Base search request JSON. Use @- for stdin; flags override matching fields.
@@ -615,9 +637,11 @@ Guidance:
 Output options:
       --format <json|text|urls>        Output format. Default: json.
       --json                           Alias for --format json.
-      --compact                        Minify JSON output.
+      --compact                        Minify JSON output. Default for files and non-interactive stdout.
+      --pretty                         Pretty-print JSON output. Default in an interactive terminal.
   -o, --output <path>                  Atomically write output; refuses to replace an existing file.
-      --error-format <text|json>       Error format on stderr. Default: text.
+      --temp-output                    Write to a private temporary file and print only its absolute path.
+      --error-format <text|json>       Default: text interactively, json otherwise.
       --json-errors                    Alias for --error-format json.
       --dry-run                        Print the effective request as JSON without an API call.
       --timeout <ms>                   Request timeout. Default: 60000.
@@ -628,7 +652,7 @@ Output options:
 
 Examples:
   parallel-search search --objective "Find latest product announcements from Parallel Web Systems" -q "Parallel Web Systems announcements" -q "Parallel Web Systems products"
-  parallel-search search --mode basic --objective "Latest quantum error correction advances" -q "quantum error correction 2026" -q "QEC algorithms"
+  parallel-search search --objective "Latest quantum error correction advances" -q "quantum error correction 2026" -q "QEC algorithms" --temp-output
   parallel-search search --objective "React performance guidance from official docs" -q "React memo docs" -q "React useMemo guide" --include-domain react.dev
 `;
 }
@@ -646,7 +670,7 @@ Extract request options:
       --objective <text>               Self-contained, specific extraction goal.
   -q, --query <query>                  Keyword query to focus extraction. Repeatable; 2-3 is recommended.
       --search-query <query>           Alias for --query.
-      --max-chars-total <n>            Total excerpt budget; does not affect full content.
+      --max-chars-total <n>            Total excerpt budget. Default: 27000; does not affect full content.
       --client-model <model>           Model that will consume the results.
       --session-id <id>                Reuse across related calls; use a new ID per task.
       --body <json|@file|@->           Base extract request JSON. Use @- for stdin; flags override matching fields.
@@ -660,7 +684,7 @@ Advanced extract settings (usually omit; live fetch and full content can increas
       --excerpt-settings <json|@file>  Raw advanced_settings.excerpt_settings object.
       --excerpt-max-chars-per-result <n>
                                       Excerpt budget per result.
-      --full-content                   Return excerpts plus full content from the start of each page.
+      --full-content                   Return full content capped at 50000 characters per result.
       --full-content-max-chars-per-result <n>
                                       Enable and cap full content per result from the page beginning.
       --full-content-settings <json|@file>
@@ -677,11 +701,14 @@ Guidance:
 Output options:
       --format <json|text|urls>        Output format. Default: json.
       --json                           Alias for --format json.
-      --compact                        Minify JSON output.
+      --compact                        Minify JSON output. Default for files and non-interactive stdout.
+      --pretty                         Pretty-print JSON output. Default in an interactive terminal.
   -o, --output <path>                  Atomically write output; refuses to replace an existing file.
-      --error-format <text|json>       Error format on stderr. Default: text.
+      --temp-output                    Write to a private temporary file and print only its absolute path.
+      --error-format <text|json>       Default: text interactively, json otherwise.
       --json-errors                    Alias for --error-format json.
-      --fail-on-errors                 Exit 6 when the API reports any per-URL Extract errors.
+      --fail-on-errors                 Explicitly enforce the default per-URL error failure behavior.
+      --allow-partial                  Exit 0 when Extract reports per-URL errors.
       --dry-run                        Print the effective request as JSON without an API call.
       --timeout <ms>                   Request timeout. Default: 60000.
       --api-key <key>                  Defaults to PARALLEL_API_KEY.
@@ -692,7 +719,7 @@ Output options:
 Examples:
   parallel-search extract https://www.un.org/en/about-us/history-of-the-un --objective "When was the United Nations established?"
   parallel-search extract --url https://example.com/article --objective "React rendering performance tips" -q "React memo optimization" -q "useMemo useCallback performance"
-  parallel-search extract --url https://example.com/report.pdf --objective "Extract methodology and headline findings" --full-content-max-chars-per-result 50000
+  parallel-search extract --url https://example.com/report.pdf --objective "Extract methodology and headline findings" --full-content --temp-output
   parallel-search extract https://example.com/a https://example.com/b --objective "Compare the documented pricing and limits"
 `;
 }
@@ -732,7 +759,12 @@ function buildCommand(state: ParseState, env: Environment): CliCommand {
     state.generated["advanced_settings"] = state.advancedSettings;
   }
 
-  const request = mergeObjects(state.bodyBase ?? {}, state.generated);
+  if (state.outputPath !== undefined && state.temporaryOutput) {
+    throw new CliError("Use either --output or --temp-output, not both");
+  }
+
+  const providedRequest = mergeObjects(state.bodyBase ?? {}, state.generated);
+  const request = applyRequestDefaults(state.endpoint, providedRequest);
   validateRequest(state.endpoint, request);
 
   const apiKey = state.apiKey ?? env["PARALLEL_API_KEY"];
@@ -762,9 +794,40 @@ function buildCommand(state: ParseState, env: Environment): CliCommand {
       format: state.format,
       outputPath: state.outputPath,
       request,
+      temporaryOutput: state.temporaryOutput,
       timeoutMs: state.timeoutMs,
     },
   };
+}
+
+function applyRequestDefaults(
+  endpoint: ApiEndpoint,
+  request: Record<string, unknown>,
+): Record<string, unknown> {
+  const withDefaults = mergeObjects(
+    endpoint === "search"
+      ? { max_chars_total: DEFAULT_MAX_CHARS_TOTAL, mode: "basic" }
+      : { max_chars_total: DEFAULT_MAX_CHARS_TOTAL },
+    request,
+  );
+  if (endpoint !== "extract" || !isRecord(withDefaults["advanced_settings"])) {
+    return withDefaults;
+  }
+
+  const advancedSettings = withDefaults["advanced_settings"];
+  const fullContent = advancedSettings["full_content"];
+  if (fullContent !== true && !isRecord(fullContent)) {
+    return withDefaults;
+  }
+
+  return mergeObjects(withDefaults, {
+    advanced_settings: {
+      full_content: mergeObjects(
+        { max_chars_per_result: DEFAULT_FULL_CONTENT_MAX_CHARS_PER_RESULT },
+        fullContent === true ? {} : fullContent,
+      ),
+    },
+  });
 }
 
 function validateRequest(endpoint: ApiEndpoint, request: Record<string, unknown>): void {

@@ -41,6 +41,7 @@ void test("builds a search request with objective, queries, and advanced setting
         include_domains: ["parallel.ai", "docs.parallel.ai"],
       },
     },
+    max_chars_total: 27000,
     mode: "basic",
     objective: "Find latest product announcements from Parallel Web Systems.",
     search_queries: ["Parallel Web Systems announcements", "Parallel Web Systems products"],
@@ -94,6 +95,63 @@ void test("supports Turbo Search mode through flags and base request bodies", ()
   }
 });
 
+void test("applies safe defaults while preserving explicit request choices", () => {
+  const search = parseCli(["search", "--query", "Parallel Search API"], env);
+  assert.equal(search.kind, "run");
+  if (search.kind === "run") {
+    assert.deepEqual(search.options.request, {
+      max_chars_total: 27000,
+      mode: "basic",
+      search_queries: ["Parallel Search API"],
+    });
+    assert.equal(search.options.compact, undefined);
+    assert.equal(search.options.failOnErrors, false);
+    assert.equal(search.options.temporaryOutput, false);
+  }
+
+  const extract = parseCli(
+    [
+      "extract",
+      "https://example.com",
+      "--body",
+      '{"max_chars_total":40000,"advanced_settings":{"full_content":true}}',
+      "--temp-output",
+      "--pretty",
+      "--allow-partial",
+    ],
+    env,
+  );
+  assert.equal(extract.kind, "run");
+  if (extract.kind === "run") {
+    assert.deepEqual(extract.options.request, {
+      advanced_settings: { full_content: { max_chars_per_result: 50000 } },
+      max_chars_total: 40000,
+      urls: ["https://example.com"],
+    });
+    assert.equal(extract.options.compact, false);
+    assert.equal(extract.options.failOnErrors, false);
+    assert.equal(extract.options.temporaryOutput, true);
+  }
+
+  const strictExtract = parseCli(["extract", "https://example.com"], env);
+  assert.equal(strictExtract.kind, "run");
+  if (strictExtract.kind === "run") {
+    assert.equal(strictExtract.options.failOnErrors, true);
+    assert.equal(strictExtract.options.request["max_chars_total"], 27000);
+  }
+});
+
+void test("rejects conflicting output destinations", () => {
+  assert.throws(
+    () =>
+      parseCli(
+        ["search", "--query", "Parallel Search API", "--output", "response.json", "--temp-output"],
+        env,
+      ),
+    (error: unknown) => error instanceof CliError && error.message.includes("not both"),
+  );
+});
+
 void test("requires explicit commands and rejects missing option values", () => {
   assert.throws(
     () => parseCli(["searhc", "--query", "Parallel Search API"], env),
@@ -143,6 +201,8 @@ void test("accepts plural JSON arrays and standard input", () => {
   assert.equal(command.options.apiKey, undefined);
   assert.equal(command.options.dryRun, true);
   assert.deepEqual(command.options.request, {
+    max_chars_total: 27000,
+    mode: "basic",
     objective: "Find current Parallel Web product information.",
     search_queries: ["Parallel Search API", "Parallel Web products"],
   });
@@ -171,7 +231,11 @@ void test("reads request bodies from standard input once", () => {
   );
   assert.equal(command.kind, "run");
   if (command.kind === "run") {
-    assert.deepEqual(command.options.request, JSON.parse(body));
+    assert.deepEqual(command.options.request, {
+      max_chars_total: 27000,
+      mode: "basic",
+      search_queries: ["Parallel Search API"],
+    });
   }
 
   assert.throws(
@@ -201,7 +265,11 @@ void test("builds redacted dry-run previews without authentication", () => {
   assert.deepEqual(preview, {
     endpoint: "search",
     method: "POST",
-    request: { search_queries: ["Parallel Search API"] },
+    request: {
+      max_chars_total: 27000,
+      mode: "basic",
+      search_queries: ["Parallel Search API"],
+    },
     timeout_ms: 60_000,
     url: "https://api.parallel.ai/v1/search",
   });
@@ -215,6 +283,12 @@ void test("exposes machine-readable request schemas", () => {
   });
   assert.deepEqual(requestSchema("search")["required"], ["search_queries"]);
   assert.deepEqual(requestSchema("extract")["required"], ["urls"]);
+  const searchProperties = requestSchema("search")["properties"] as Record<string, unknown>;
+  assert.deepEqual(searchProperties["mode"], {
+    default: "basic",
+    enum: ["turbo", "basic", "advanced"],
+    type: "string",
+  });
 });
 
 void test("documents current Search modes and query guidance", () => {
@@ -297,7 +371,9 @@ void test("supports Extract full-content boolean and raw advanced-setting flags"
   const fullContent = parseCli(["extract", "https://example.com", "--full-content"], env);
   assert.equal(fullContent.kind, "run");
   if (fullContent.kind === "run") {
-    assert.deepEqual(fullContent.options.request["advanced_settings"], { full_content: true });
+    assert.deepEqual(fullContent.options.request["advanced_settings"], {
+      full_content: { max_chars_per_result: 50000 },
+    });
   }
 
   const noFullContent = parseCli(["extract", "https://example.com", "--no-full-content"], env);
@@ -356,6 +432,8 @@ void test("merges body as a base request and lets CLI flags override nested sett
       },
       max_results: 5,
     },
+    max_chars_total: 27000,
+    mode: "basic",
     search_queries: ["body query"],
   });
 });

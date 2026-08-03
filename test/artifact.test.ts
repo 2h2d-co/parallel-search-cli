@@ -54,6 +54,7 @@ void test("the packed CLI exposes schemas and accepts stdin request bodies", () 
     endpoint: "search",
     method: "POST",
     request: {
+      max_chars_total: 27000,
       mode: "turbo",
       search_queries: ["Parallel Search API"],
     },

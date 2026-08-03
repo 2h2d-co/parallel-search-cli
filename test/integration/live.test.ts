@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { after, before, test } from "node:test";
 import {
   assertCliSuccess,
@@ -298,7 +298,7 @@ void test(
         ],
         { env: realApiEnv() },
       );
-      assertCliSuccess(defaultMode, "live default Advanced Search file output");
+      assertCliSuccess(defaultMode, "live default Basic Search file output");
       const receipt = parseJsonObject(defaultMode.stdout, "Search output receipt");
       assert.equal(receipt["output"], outputFile);
       assert.equal(receipt["bytes"], Buffer.byteLength(readFileSync(outputFile, "utf8")));
@@ -460,6 +460,7 @@ void test(
         "Confirm the URL cannot be extracted.",
         "--query",
         "unreachable URL extraction error",
+        "--allow-partial",
         "--compact",
         "--timeout",
         liveRequestTimeout,
@@ -470,7 +471,6 @@ void test(
     assertPartialExtract(permissiveResponse, unreachableUrl);
 
     const directory = mkdtempSync(join(tmpdir(), "parallel-search-live-partial-"));
-    const outputFile = join(directory, "partial-response.json");
     try {
       const strict = runPackedCli(
         packedCli,
@@ -484,19 +484,17 @@ void test(
           "--max-age-seconds",
           "600",
           "--disable-cache-fallback",
-          "--fail-on-errors",
-          "--compact",
-          "--json-errors",
-          "--output",
-          outputFile,
+          "--temp-output",
           "--timeout",
           liveRequestTimeout,
         ],
-        { env: realApiEnv() },
+        { env: { ...realApiEnv(), TMPDIR: directory } },
       );
       assert.equal(strict.status, 6);
-      const receipt = parseJsonObject(strict.stdout, "partial Extract output receipt");
-      assert.equal(receipt["output"], outputFile);
+      const outputFile = strict.stdout.trim();
+      assert.equal(dirname(dirname(outputFile)), directory);
+      assert.equal(statSync(dirname(outputFile)).mode & 0o777, 0o700);
+      assert.equal(statSync(outputFile).mode & 0o777, 0o600);
       const error = responseError(strict.stderr, "strict partial Extract error");
       assert.equal(error["kind"], "partial");
       assert.ok(Array.isArray(error["detail"]) && error["detail"].length === 1);

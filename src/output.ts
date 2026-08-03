@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, linkSync, unlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname, resolve } from "node:path";
+import { chmodSync, linkSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { Buffer } from "node:buffer";
 import { CliError } from "./core.ts";
 
@@ -8,6 +9,31 @@ export type OutputReceipt = {
   bytes: number;
   output: string;
 };
+
+export function writeTemporaryOutputFile(
+  endpoint: "search" | "extract",
+  format: "json" | "text" | "urls",
+  content: string,
+): OutputReceipt {
+  let directory: string;
+  try {
+    directory = mkdtempSync(join(tmpdir(), "parallel-search-"));
+    chmodSync(directory, 0o700);
+  } catch (error) {
+    throw new CliError(
+      `Could not create temporary output directory: ${error instanceof Error ? error.message : String(error)}`,
+      { kind: "output" },
+    );
+  }
+
+  const filename = format === "json" ? `${endpoint}.json` : `${endpoint}-${format}.txt`;
+  try {
+    return writeOutputFile(join(directory, filename), content);
+  } catch (error) {
+    rmSync(directory, { force: true, recursive: true });
+    throw error;
+  }
+}
 
 export function writeOutputFile(path: string, content: string): OutputReceipt {
   const output = resolve(path);

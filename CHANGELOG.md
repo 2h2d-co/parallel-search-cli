@@ -6,6 +6,18 @@ Current changes are tracked under `Unreleased`.
 
 ## Unreleased
 
+### Added
+
+- `--temp-output` for private generated response files whose absolute path is returned directly.
+- Explicit `--pretty` and `--allow-partial` overrides for automatic presentation and Extract failure defaults.
+
+### Changed
+
+- Default Search to Basic mode and cap Search and Extract excerpts at 27,000 total characters.
+- Cap `--full-content` at 50,000 characters per result while keeping full content opt-in.
+- Exit on Extract per-URL errors by default, with the complete response preserved before exit.
+- Use compact JSON and structured errors outside interactive terminals while retaining human-readable interactive output.
+
 ## [0.0.2] - 2026-08-03
 
 ### Added

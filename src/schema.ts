@@ -33,6 +33,7 @@ const commonProperties = {
     type: "string",
   },
   max_chars_total: {
+    default: 27000,
     description: "Upper bound on total characters across excerpts.",
     minimum: 1,
     type: "integer",
@@ -91,7 +92,7 @@ const searchSchema = {
       },
       type: "object",
     },
-    mode: { enum: ["turbo", "basic", "advanced"], type: "string" },
+    mode: { default: "basic", enum: ["turbo", "basic", "advanced"], type: "string" },
     search_queries: { ...searchQueries, minItems: 1 },
   },
   required: ["search_queries"],
@@ -116,7 +117,7 @@ const extractSchema = {
             {
               additionalProperties: false,
               properties: {
-                max_chars_per_result: { minimum: 1, type: "integer" },
+                max_chars_per_result: { default: 50000, minimum: 1, type: "integer" },
               },
               type: "object",
             },

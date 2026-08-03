@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -18,7 +18,6 @@ void test("writes output atomically and refuses to replace existing files", () =
       "--query",
       "Parallel Search API",
       "--dry-run",
-      "--compact",
       "--output",
       output,
     ]);
@@ -31,7 +30,11 @@ void test("writes output atomically and refuses to replace existing files", () =
     assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), {
       endpoint: "search",
       method: "POST",
-      request: { search_queries: ["Parallel Search API"] },
+      request: {
+        max_chars_total: 27000,
+        mode: "basic",
+        search_queries: ["Parallel Search API"],
+      },
       timeout_ms: 60_000,
       url: "https://api.parallel.ai/v1/search",
     });
@@ -52,8 +55,44 @@ void test("writes output atomically and refuses to replace existing files", () =
   }
 });
 
-void test("returns stable usage and authentication errors as JSON", () => {
-  const usage = runCliSync(["search", "--query", "--mode", "basic", "--json-errors"]);
+void test("writes to a generated private temporary file and returns only its path", () => {
+  const temporaryRoot = mkdtempSync(join(tmpdir(), "parallel-search-cli-temp-output-test-"));
+
+  try {
+    const result = runCliSync(
+      ["extract", "https://example.com", "--dry-run", "--temp-output", "--pretty"],
+      { TMPDIR: temporaryRoot },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, "");
+
+    const output = result.stdout.trim();
+    assert.equal(dirname(dirname(output)), temporaryRoot);
+    assert.match(output, /\/parallel-search-[^/]+\/extract\.json$/);
+    assert.equal(statSync(dirname(output)).mode & 0o777, 0o700);
+    assert.equal(statSync(output).mode & 0o777, 0o600);
+    assert.match(readFileSync(output, "utf8"), /\n  "endpoint": "extract"/);
+    assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), {
+      endpoint: "extract",
+      method: "POST",
+      request: {
+        max_chars_total: 27000,
+        urls: ["https://example.com"],
+      },
+      timeout_ms: 60_000,
+      url: "https://api.parallel.ai/v1/extract",
+    });
+  } finally {
+    rmSync(temporaryRoot, { force: true, recursive: true });
+  }
+});
+
+void test("uses compact JSON and structured errors outside an interactive terminal", () => {
+  const preview = runCliSync(["search", "--query", "Parallel Search API", "--dry-run"]);
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.equal(preview.stdout, `${JSON.stringify(JSON.parse(preview.stdout))}\n`);
+
+  const usage = runCliSync(["search", "--query", "--mode", "basic"]);
   assert.equal(usage.status, 2);
   assert.deepEqual(JSON.parse(usage.stderr), {
     error: {
@@ -63,13 +102,20 @@ void test("returns stable usage and authentication errors as JSON", () => {
     type: "error",
   });
 
-  const auth = runCliSync(["search", "--query", "Parallel Search API", "--json-errors"]);
+  const auth = runCliSync(["search", "--query", "Parallel Search API"]);
   assert.equal(auth.status, 3);
   assert.equal(JSON.parse(auth.stderr).error.kind, "auth");
+
+  const text = runCliSync(["search", "--query", "Parallel Search API", "--error-format", "text"]);
+  assert.equal(text.status, 3);
+  assert.match(text.stderr, /^parallel-search: Missing API key/);
 });
 
-function runCliSync(args: string[]): { status: number | null; stderr: string; stdout: string } {
-  const env = { ...process.env };
+function runCliSync(
+  args: string[],
+  extraEnv: Record<string, string> = {},
+): { status: number | null; stderr: string; stdout: string } {
+  const env = { ...process.env, ...extraEnv };
   delete env["PARALLEL_API_KEY"];
   delete env["PARALLEL_BASE_URL"];
   const result = spawnSync(process.execPath, [cliPath, ...args], {

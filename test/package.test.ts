@@ -11,10 +11,10 @@ void test("packages an agent skill with bounded and safe CLI guidance", () => {
   const skill = readFileSync("skills/parallel-search-cli/SKILL.md", "utf8");
   assert.match(skill, /^name: parallel-search-cli$/m);
   assert.match(skill, /allowed-tools: Bash\(parallel-search:\*\)/);
-  assert.match(skill, /--mode basic/);
-  assert.match(skill, /--max-chars-total 27000/);
-  assert.match(skill, /--output/);
-  assert.match(skill, /--fail-on-errors/);
+  assert.match(skill, /defaults to Basic mode/);
+  assert.match(skill, /27,000-character total excerpt budget/);
+  assert.match(skill, /--temp-output/);
+  assert.match(skill, /exits 6 on per-URL errors by default/);
   assert.match(skill, /untrusted data/);
   assert.match(skill, /never expose `PARALLEL_API_KEY`/);
 });

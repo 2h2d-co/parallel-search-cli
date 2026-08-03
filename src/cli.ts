@@ -11,12 +11,12 @@ import {
   requestPreview,
   VERSION,
 } from "./core.ts";
-import { writeOutputFile } from "./output.ts";
+import { writeOutputFile, writeTemporaryOutputFile } from "./output.ts";
 import { requestSchema } from "./schema.ts";
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
-  const errorFormat = errorFormatFromArgv(argv);
+  const errorFormat = errorFormatFromArgv(argv, process.stderr.isTTY === true ? "text" : "json");
 
   try {
     const command = parseCli(argv, process.env);
@@ -32,7 +32,9 @@ async function main(): Promise<void> {
     }
 
     if (command.kind === "schema") {
-      process.stdout.write(`${formatResponse(requestSchema(command.endpoint), "json", false)}\n`);
+      process.stdout.write(
+        `${formatResponse(requestSchema(command.endpoint), "json", process.stdout.isTTY !== true)}\n`,
+      );
       return;
     }
 
@@ -40,13 +42,18 @@ async function main(): Promise<void> {
       ? requestPreview(command.options)
       : await apiJson(command.options);
     const format = command.options.dryRun ? "json" : command.options.format;
-    const content = `${formatResponse(response, format, command.options.compact)}\n`;
+    const writesFile = command.options.outputPath !== undefined || command.options.temporaryOutput;
+    const compact = command.options.compact ?? (writesFile || process.stdout.isTTY !== true);
+    const content = `${formatResponse(response, format, compact)}\n`;
 
-    if (command.options.outputPath === undefined) {
-      process.stdout.write(content);
-    } else {
+    if (command.options.temporaryOutput) {
+      const receipt = writeTemporaryOutputFile(command.endpoint, format, content);
+      process.stdout.write(`${receipt.output}\n`);
+    } else if (command.options.outputPath !== undefined) {
       const receipt = writeOutputFile(command.options.outputPath, content);
       process.stdout.write(`${JSON.stringify({ ...receipt, type: "output" })}\n`);
+    } else {
+      process.stdout.write(content);
     }
 
     const extractErrors = extractResponseErrors(response);
