@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-export const VERSION = "0.0.2";
+export const VERSION = "0.1.0";
 
 const SEARCH_MODES = ["turbo", "basic", "advanced"];
 const OUTPUT_FORMATS = ["json", "text", "urls"];

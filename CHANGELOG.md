@@ -6,6 +6,8 @@ Current changes are tracked under `Unreleased`.
 
 ## Unreleased
 
+## [0.1.0] - 2026-08-03
+
 ### Added
 
 - `--temp-output` for private generated response files whose absolute path is returned directly.

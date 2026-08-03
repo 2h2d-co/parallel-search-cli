@@ -1,6 +1,6 @@
 {
   "name": "parallel-search-cli",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "An unofficial zero-runtime-dependency CLI for the Parallel Search and Extract APIs",
   "homepage": "https://github.com/2h2d-co/parallel-search-cli#readme",
   "bugs": {
