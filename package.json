@@ -34,6 +34,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --test --test-concurrency=1 test/*.test.ts",
     "test:integration": "npm test && node --test --test-concurrency=1 test/integration/*.test.ts",
+    "release": "node scripts/release.ts",
     "fmt": "oxfmt",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

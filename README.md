@@ -228,7 +228,15 @@ PARALLEL_API_KEY="..." npm run test:integration
 
 The integration command first runs the complete deterministic suite, then builds and unpacks the same temporary npm artifact for real requests to `https://api.parallel.ai/v1`. Live coverage includes every Search mode, focused and whole-page Extract, batch Extract, full content, advanced settings, all output formats, session reuse, authentication, API validation, timeout, network, partial Extract, and output-file contracts. It fails rather than skipping when `PARALLEL_API_KEY` is missing. The GitHub `Live API integration` workflow provides the same suite as a manual, protected-environment check.
 
-Stable and prerelease `v<version>` tags trigger the shared CI release flow. CI validates, tests, builds, previews, and stages the package on npm with provenance. Stable versions use `latest`; prereleases derive their npm dist-tag from the first prerelease identifier. Release tags must be lightweight tags. Create one with `git tag v<version>`; do not use `git tag -a`, `git tag -s`, `git tag -m`, or `cog bump --annotated`.
+Release flow:
+
+1. Run `npm run release -- X.Y.Z` from a clean, synchronized `main`.
+2. The command builds the exact package from the staged Git index, records its SHA-256 in an SSH-signed release commit, proves a clean rebuild is reproducible, and creates a lightweight `vX.Y.Z` tag.
+3. Inspect the result, then push atomically with `git push --atomic origin main vX.Y.Z`.
+4. GitHub Actions builds and tests without publishing credentials. A separate GitHub-owned job verifies the commit signature and signed package digest before attesting and staging that exact archive through npm trusted publishing.
+5. Approve the staged package on npmjs.com, or with `npm stage approve <stage-id>`.
+
+Stable versions use the `latest` npm dist-tag; prereleases derive the tag from their first prerelease identifier. Do not create annotated or signed tag objects.
 
 The project uses `oxfmt`, `oxlint`, TypeScript 7 with `erasableSyntaxOnly`, and publishes compiled JavaScript without install/postinstall scripts.
 
