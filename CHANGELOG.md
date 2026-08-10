@@ -9,6 +9,8 @@ Current changes are tracked under `Unreleased`.
 ### Security
 
 - Require npm releases to match a locally built SHA-256 recorded in an SSH-signed release commit before trusted publishing can stage the package.
+- Require code-owner review for release policy, protect `main` and `v*` refs, and gate npm OIDC behind a reviewed tag-only environment.
+- Restrict manually dispatched live integration to `main`, install without lifecycle scripts, and gate API credentials behind a protected environment.
 
 ### Fixed
 
