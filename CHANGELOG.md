@@ -10,6 +10,10 @@ Current changes are tracked under `Unreleased`.
 
 - Require npm releases to match a locally built SHA-256 recorded in an SSH-signed release commit before trusted publishing can stage the package.
 
+### Fixed
+
+- Read the CLI version from the package manifest so prerelease builds report their exact version.
+
 ## [0.1.0] - 2026-08-03
 
 ### Added

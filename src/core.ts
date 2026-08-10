@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-export const VERSION = "0.1.0";
+export const VERSION = readPackageVersion();
 
 const SEARCH_MODES = ["turbo", "basic", "advanced"];
 const OUTPUT_FORMATS = ["json", "text", "urls"];
@@ -1488,6 +1488,17 @@ function getRecord(value: unknown): Record<string, unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readPackageVersion(): string {
+  const packageJson: unknown = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  if (!isRecord(packageJson) || typeof packageJson["version"] !== "string") {
+    throw new Error("package.json must include a string version");
+  }
+
+  return packageJson["version"];
 }
 
 function stringField(record: Record<string, unknown>, field: string): string | undefined {
