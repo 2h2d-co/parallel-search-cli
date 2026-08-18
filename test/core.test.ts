@@ -13,7 +13,7 @@ import { requestSchema } from "../src/schema.ts";
 
 const env = { PARALLEL_API_KEY: "test-key" };
 
-void test("builds a search request with objective, queries, and advanced settings", () => {
+test("builds a search request with objective, queries, and advanced settings", () => {
   const command = parseCli(
     [
       "search",
@@ -57,7 +57,7 @@ void test("builds a search request with objective, queries, and advanced setting
   assert.equal(command.options.baseUrl, "https://api.parallel.ai/v1");
 });
 
-void test("supports help, version, and equivalent option aliases", () => {
+test("supports help, version, and equivalent option aliases", () => {
   assert.deepEqual(parseCli(["-h"], {}), { kind: "help" });
   assert.deepEqual(parseCli(["search", "--help"], {}), { endpoint: "search", kind: "help" });
   assert.deepEqual(parseCli(["-V"], {}), { kind: "version" });
@@ -85,7 +85,7 @@ void test("supports help, version, and equivalent option aliases", () => {
   }
 });
 
-void test("supports Turbo Search mode through flags and base request bodies", () => {
+test("supports Turbo Search mode through flags and base request bodies", () => {
   const fromFlag = parseCli(["search", "--mode", "turbo", "-q", "Parallel Search API"], env);
   assert.equal(fromFlag.kind, "run");
   if (fromFlag.kind === "run") {
@@ -102,7 +102,7 @@ void test("supports Turbo Search mode through flags and base request bodies", ()
   }
 });
 
-void test("applies safe defaults while preserving explicit request choices", () => {
+test("applies safe defaults while preserving explicit request choices", () => {
   const search = parseCli(["search", "--query", "Parallel Search API"], env);
   assert.equal(search.kind, "run");
   if (search.kind === "run") {
@@ -148,7 +148,7 @@ void test("applies safe defaults while preserving explicit request choices", () 
   }
 });
 
-void test("rejects conflicting output destinations", () => {
+test("rejects conflicting output destinations", () => {
   assert.throws(
     () =>
       parseCli(
@@ -159,7 +159,7 @@ void test("rejects conflicting output destinations", () => {
   );
 });
 
-void test("requires explicit commands and rejects missing option values", () => {
+test("requires explicit commands and rejects missing option values", () => {
   assert.throws(
     () => parseCli(["searhc", "--query", "Parallel Search API"], env),
     (error: unknown) => error instanceof CliError && error.message.includes("Unknown command"),
@@ -174,7 +174,7 @@ void test("requires explicit commands and rejects missing option values", () => 
   );
 });
 
-void test("preserves exact singular query and URL values", () => {
+test("preserves exact singular query and URL values", () => {
   const search = parseCli(["search", "-q", "Federal Reserve, SEC guidance"], env);
   assert.equal(search.kind, "run");
   if (search.kind === "run") {
@@ -188,7 +188,7 @@ void test("preserves exact singular query and URL values", () => {
   }
 });
 
-void test("accepts plural JSON arrays and standard input", () => {
+test("accepts plural JSON arrays and standard input", () => {
   const command = parseCli(
     [
       "search",
@@ -227,7 +227,7 @@ void test("accepts plural JSON arrays and standard input", () => {
   }
 });
 
-void test("reads request bodies from standard input once", () => {
+test("reads request bodies from standard input once", () => {
   const body = '{"mode":"basic","search_queries":["Parallel Search API"]}';
   const command = parseCli(
     ["search", "--body", "@-", "--dry-run"],
@@ -258,7 +258,7 @@ void test("reads request bodies from standard input once", () => {
   );
 });
 
-void test("builds redacted dry-run previews without authentication", () => {
+test("builds redacted dry-run previews without authentication", () => {
   const command = parseCli(
     ["search", "--query", "Parallel Search API", "--api-key", "secret", "--dry-run"],
     {},
@@ -283,7 +283,7 @@ void test("builds redacted dry-run previews without authentication", () => {
   assert.doesNotMatch(JSON.stringify(preview), /secret/);
 });
 
-void test("exposes machine-readable request schemas", () => {
+test("exposes machine-readable request schemas", () => {
   assert.deepEqual(parseCli(["schema", "search"], {}), {
     endpoint: "search",
     kind: "schema",
@@ -298,14 +298,14 @@ void test("exposes machine-readable request schemas", () => {
   });
 });
 
-void test("documents current Search modes and query guidance", () => {
+test("documents current Search modes and query guidance", () => {
   const help = helpText("search");
   assert.match(help, /turbo, basic, or advanced/);
   assert.match(help, /2-3 diverse keyword queries/);
   assert.match(help, /Avoid sentences, instructions, and site: operators/);
 });
 
-void test("documents current Extract focusing and advanced-setting guidance", () => {
+test("documents current Extract focusing and advanced-setting guidance", () => {
   const help = helpText("extract");
   assert.match(help, /2-3 diverse 3-6 word queries/);
   assert.match(help, /does not affect full content/);
@@ -313,7 +313,7 @@ void test("documents current Extract focusing and advanced-setting guidance", ()
   assert.match(help, /redundant with excerpts and may warn/);
 });
 
-void test("builds an extract request from positional and flag URLs", () => {
+test("builds an extract request from positional and flag URLs", () => {
   const command = parseCli(
     [
       "extract",
@@ -374,7 +374,7 @@ void test("builds an extract request from positional and flag URLs", () => {
   });
 });
 
-void test("supports Extract full-content boolean and raw advanced-setting flags", () => {
+test("supports Extract full-content boolean and raw advanced-setting flags", () => {
   const fullContent = parseCli(["extract", "https://example.com", "--full-content"], env);
   assert.equal(fullContent.kind, "run");
   if (fullContent.kind === "run") {
@@ -413,7 +413,7 @@ void test("supports Extract full-content boolean and raw advanced-setting flags"
   }
 });
 
-void test("merges body as a base request and lets CLI flags override nested settings", () => {
+test("merges body as a base request and lets CLI flags override nested settings", () => {
   const command = parseCli(
     [
       "search",
@@ -445,7 +445,7 @@ void test("merges body as a base request and lets CLI flags override nested sett
   });
 });
 
-void test("accepts documented source-policy domain and date forms", () => {
+test("accepts documented source-policy domain and date forms", () => {
   const command = parseCli(
     [
       "search",
@@ -480,7 +480,7 @@ void test("accepts documented source-policy domain and date forms", () => {
   });
 });
 
-void test("rejects conflicting source-policy domain lists", () => {
+test("rejects conflicting source-policy domain lists", () => {
   assert.throws(
     () =>
       parseCli(
@@ -499,7 +499,7 @@ void test("rejects conflicting source-policy domain lists", () => {
   );
 });
 
-void test("rejects invalid source-policy domains", () => {
+test("rejects invalid source-policy domains", () => {
   const invalidDomains = [
     "https://parallel.ai",
     "parallel.ai/docs",
@@ -517,7 +517,7 @@ void test("rejects invalid source-policy domains", () => {
   }
 });
 
-void test("rejects more than 200 source-policy domains", () => {
+test("rejects more than 200 source-policy domains", () => {
   const includeDomains = Array.from({ length: 201 }, (_, index) => `domain-${index}.example`);
   assert.throws(
     () =>
@@ -536,7 +536,7 @@ void test("rejects more than 200 source-policy domains", () => {
   );
 });
 
-void test("rejects invalid source-policy dates", () => {
+test("rejects invalid source-policy dates", () => {
   for (const date of ["not-a-date", "2026-02-30"]) {
     assert.throws(
       () => parseCli(["search", "-q", "Parallel Search API", "--after-date", date], env),
@@ -546,7 +546,7 @@ void test("rejects invalid source-policy dates", () => {
   }
 });
 
-void test("rejects Search result limits above the public API cap", () => {
+test("rejects Search result limits above the public API cap", () => {
   assert.throws(
     () =>
       parseCli(
@@ -561,14 +561,14 @@ void test("rejects Search result limits above the public API cap", () => {
   );
 });
 
-void test("rejects invalid Search location formats", () => {
+test("rejects invalid Search location formats", () => {
   assert.throws(
     () => parseCli(["search", "-q", "Parallel Search API", "--location", "usa"], env),
     (error: unknown) => error instanceof CliError && error.message.includes("ISO 3166-1 alpha-2"),
   );
 });
 
-void test("rejects search requests without search_queries", () => {
+test("rejects search requests without search_queries", () => {
   assert.throws(
     () => parseCli(["search", "Find", "official", "docs"], env),
     (error: unknown) =>
@@ -576,7 +576,7 @@ void test("rejects search requests without search_queries", () => {
   );
 });
 
-void test("rejects extract requests with more than 20 URLs", () => {
+test("rejects extract requests with more than 20 URLs", () => {
   const urls = Array.from({ length: 21 }, (_, index) => `https://example.com/${index}`);
   assert.throws(
     () => parseCli(["extract", ...urls], env),
@@ -584,7 +584,7 @@ void test("rejects extract requests with more than 20 URLs", () => {
   );
 });
 
-void test("rejects invalid Extract URLs, query counts, and advanced limits", () => {
+test("rejects invalid Extract URLs, query counts, and advanced limits", () => {
   assert.throws(
     () => parseCli(["extract", "file:///tmp/report.pdf"], env),
     (error: unknown) => error instanceof CliError && error.message.includes("http or https URL"),
@@ -616,7 +616,7 @@ void test("rejects invalid Extract URLs, query counts, and advanced limits", () 
   );
 });
 
-void test("formats Extract errors, warnings, usage, and session metadata", () => {
+test("formats Extract errors, warnings, usage, and session metadata", () => {
   const response = {
     errors: [
       {
@@ -644,7 +644,7 @@ void test("formats Extract errors, warnings, usage, and session metadata", () =>
   assert.match(text, /usage: \[/);
 });
 
-void test("references every public parser option in behavioral coverage", () => {
+test("references every public parser option in behavioral coverage", () => {
   const parserSource = readFileSync("src/core.ts", "utf8");
   const behavioralTests = [
     "test/artifact.test.ts",
@@ -667,7 +667,7 @@ void test("references every public parser option in behavioral coverage", () => 
   assert.deepEqual(uncovered, []);
 });
 
-void test("formats URL and text output", () => {
+test("formats URL and text output", () => {
   const response = {
     results: [
       {

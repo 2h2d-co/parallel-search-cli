@@ -32,7 +32,7 @@ after(() => {
   installed?.cleanup();
 });
 
-void test("the packed CLI maps a real API authentication failure to JSON", () => {
+test("the packed CLI maps a real API authentication failure to JSON", () => {
   const result = runPackedCli(
     getInstalled(),
     [
@@ -57,7 +57,7 @@ void test("the packed CLI maps a real API authentication failure to JSON", () =>
   assert.equal(error["status"], 401);
 });
 
-void test("the packed CLI preserves real API validation details", () => {
+test("the packed CLI preserves real API validation details", () => {
   const result = runPackedCli(
     getInstalled(),
     [
@@ -81,7 +81,7 @@ void test("the packed CLI preserves real API validation details", () => {
   assert.notEqual(error["detail"], undefined);
 });
 
-void test("the packed CLI distinguishes real timeouts from network failures", () => {
+test("the packed CLI distinguishes real timeouts from network failures", () => {
   const timeout = runPackedCli(getInstalled(), [
     "search",
     "--query",
@@ -110,7 +110,7 @@ void test("the packed CLI distinguishes real timeouts from network failures", ()
   assert.match(network.stderr, /^parallel-search: Network request failed:/);
 });
 
-void test(
+test(
   "the packed CLI completes Turbo Search and focused Extract in one real session",
   { timeout: 300_000 },
   () => {
@@ -188,7 +188,7 @@ void test(
   },
 );
 
-void test(
+test(
   "the packed CLI completes Basic, Advanced, and default Search with every output path",
   { timeout: 300_000 },
   () => {
@@ -314,7 +314,7 @@ void test(
   },
 );
 
-void test(
+test(
   "the packed CLI completes real batch, whole-page, and full-content Extract workflows",
   { timeout: 300_000 },
   () => {
@@ -444,7 +444,7 @@ void test(
   },
 );
 
-void test(
+test(
   "the packed CLI preserves real partial Extract responses and enforces strict mode",
   { timeout: 300_000 },
   () => {

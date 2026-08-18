@@ -1150,11 +1150,17 @@ async function postApi(options: CliRunOptions & { apiKey: string }): Promise<Res
     });
   } catch (error) {
     if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
-      throw new CliError(`Request timed out after ${options.timeoutMs} ms`, { kind: "timeout" });
+      throw new CliError(`Request timed out after ${options.timeoutMs} ms`, {
+        cause: error,
+        kind: "timeout",
+      });
     }
 
     const reason = error instanceof Error ? error.message : String(error);
-    throw new CliError(`Network request failed: ${reason}`, { kind: "network" });
+    throw new CliError(`Network request failed: ${reason}`, {
+      cause: error,
+      kind: "network",
+    });
   }
 
   if (!response.ok) {
@@ -1488,7 +1494,7 @@ function assertHttpUrl(value: string, field: string): void {
       throw error;
     }
 
-    throw new CliError(`${field} must be a valid URL`);
+    throw new CliError(`${field} must be a valid URL`, { cause: error });
   }
 }
 

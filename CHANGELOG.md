@@ -18,6 +18,7 @@ Current changes are tracked under `Unreleased`.
 
 ### Fixed
 
+- Preserve URL-validation, timeout, and network failures as causes of CLI errors.
 - Read the CLI version from the package manifest so prerelease builds report their exact version.
 
 ## [0.1.0] - 2026-08-03
