@@ -111,10 +111,13 @@ void test("uses compact JSON and structured errors outside an interactive termin
   assert.match(text.stderr, /^parallel-search: Missing API key/);
 });
 
-function runCliSync(
-  args: string[],
-  extraEnv: Record<string, string> = {},
-): { status: number | null; stderr: string; stdout: string } {
+type CliResult = {
+  status: number | null;
+  stderr: string;
+  stdout: string;
+};
+
+function runCliSync(args: string[], extraEnv: Record<string, string> = {}): CliResult {
   const env = { ...process.env, ...extraEnv };
   delete env["PARALLEL_API_KEY"];
   delete env["PARALLEL_BASE_URL"];

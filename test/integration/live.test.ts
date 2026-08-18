@@ -4,10 +4,10 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, test } from "node:test";
+import { isJsonObject, isString, type JsonObject } from "../../src/core.ts";
 import {
   assertCliSuccess,
   buildAndUnpackPackedCli,
-  isRecord,
   type PackedCli,
   parseJsonObject,
   runPackedCli,
@@ -77,7 +77,7 @@ void test("the packed CLI preserves real API validation details", () => {
   const error = responseError(result.stderr, "live validation error");
   assert.equal(error["kind"], "api");
   assert.equal(error["status"], 422);
-  assert.equal(typeof error["ref_id"], "string");
+  assert.ok(isString(error["ref_id"]));
   assert.notEqual(error["detail"], undefined);
 });
 
@@ -508,7 +508,7 @@ void test(
   },
 );
 
-function realApiEnv(): Record<string, string> {
+function realApiEnv() {
   return { PARALLEL_BASE_URL: realApiBaseUrl };
 }
 
@@ -522,15 +522,15 @@ function successfulJson(result: ReturnType<typeof runPackedCli>, description: st
   return parseJsonObject(result.stdout, `${description} response`);
 }
 
-function responseError(stderr: string, description: string): Record<string, unknown> {
+function responseError(stderr: string, description: string): JsonObject {
   const response = parseJsonObject(stderr, description);
   const error = response["error"];
-  assert.ok(isRecord(error), `${description} did not contain an error object`);
+  assert.ok(isJsonObject(error), `${description} did not contain an error object`);
   return error;
 }
 
 function assertEndpointResponse(
-  response: Record<string, unknown>,
+  response: JsonObject,
   idField: "extract_id" | "search_id",
   idPrefix: "extract" | "search",
   expectedSessionId?: string,
@@ -544,48 +544,48 @@ function assertEndpointResponse(
   assertUsage(response, idPrefix === "search" ? "Search" : "Extract");
 }
 
-function assertResults(response: Record<string, unknown>, endpoint: string): void {
+function assertResults(response: JsonObject, endpoint: string): void {
   const result = firstResult(response, endpoint);
   assert.match(requiredString(result, "url"), /^https?:\/\//);
 
   const excerpts = result["excerpts"];
   assert.ok(
     Array.isArray(excerpts) &&
-      excerpts.some((excerpt) => typeof excerpt === "string" && excerpt.trim() !== ""),
+      excerpts.some((excerpt) => isString(excerpt) && excerpt.trim() !== ""),
     `${endpoint} returned no excerpts`,
   );
 }
 
-function firstResult(response: Record<string, unknown>, endpoint: string): Record<string, unknown> {
+function firstResult(response: JsonObject, endpoint: string): JsonObject {
   const results = response["results"];
   assert.ok(Array.isArray(results) && results.length > 0, `${endpoint} returned no results`);
   const first = results[0];
-  assert.ok(isRecord(first), `${endpoint} returned an invalid result`);
+  assert.ok(isJsonObject(first), `${endpoint} returned an invalid result`);
   return first;
 }
 
-function assertUsage(response: Record<string, unknown>, endpoint: string): void {
+function assertUsage(response: JsonObject, endpoint: string): void {
   const usage = response["usage"];
   assert.ok(Array.isArray(usage) && usage.length > 0, `${endpoint} returned no usage metadata`);
 }
 
-function assertFullContent(response: Record<string, unknown>, description: string): void {
+function assertFullContent(response: JsonObject, description: string): void {
   const result = firstResult(response, description);
   assert.ok(
-    typeof result["full_content"] === "string" && result["full_content"].trim() !== "",
+    isString(result["full_content"]) && result["full_content"].trim() !== "",
     `${description} returned no full content`,
   );
 }
 
-function assertPartialExtract(response: Record<string, unknown>, expectedUrl: string): void {
+function assertPartialExtract(response: JsonObject, expectedUrl: string): void {
   assert.match(requiredString(response, "extract_id"), /^extract_/);
   requiredString(response, "session_id");
   const errors = response["errors"];
   assert.ok(Array.isArray(errors) && errors.length === 1, "Extract did not return one URL error");
   const error = errors[0];
-  assert.ok(isRecord(error), "Extract returned an invalid URL error");
+  assert.ok(isJsonObject(error), "Extract returned an invalid URL error");
   assert.equal(error["url"], expectedUrl);
-  assert.equal(typeof error["error_type"], "string");
+  assert.ok(isString(error["error_type"]));
   assert.deepEqual(response["results"], []);
   assert.ok(Array.isArray(response["usage"]), "partial Extract returned invalid usage metadata");
 }
@@ -598,9 +598,9 @@ function assertUrlOutput(output: string, description: string): void {
   }
 }
 
-function requiredString(record: Record<string, unknown>, field: string): string {
+function requiredString(record: JsonObject, field: string): string {
   const value = record[field];
-  assert.ok(typeof value === "string" && value !== "", `${field} must be a non-empty string`);
+  assert.ok(isString(value) && value !== "", `${field} must be a non-empty string`);
   return value;
 }
 

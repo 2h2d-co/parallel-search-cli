@@ -3,7 +3,7 @@ import { chmodSync, linkSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { Buffer } from "node:buffer";
-import { CliError } from "./core.ts";
+import { CliError, isString } from "./core.ts";
 
 export type OutputReceipt = {
   bytes: number;
@@ -64,10 +64,18 @@ export function writeOutputFile(path: string, content: string): OutputReceipt {
   };
 }
 
+type NodeError = {
+  code?: unknown;
+};
+
 function nodeErrorCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
+  if (!isNodeError(error)) {
     return undefined;
   }
 
-  return typeof error.code === "string" ? error.code : undefined;
+  return isString(error.code) ? error.code : undefined;
+}
+
+function isNodeError(value: unknown): value is NodeError {
+  return typeof value === "object" && value !== null;
 }

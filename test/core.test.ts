@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { CliError, formatResponse, helpText, parseCli, requestPreview } from "../src/core.ts";
+import {
+  CliError,
+  formatResponse,
+  helpText,
+  parseCli,
+  requestPreview,
+  type JsonObject,
+} from "../src/core.ts";
 import { requestSchema } from "../src/schema.ts";
 
 const env = { PARALLEL_API_KEY: "test-key" };
@@ -283,7 +290,7 @@ void test("exposes machine-readable request schemas", () => {
   });
   assert.deepEqual(requestSchema("search")["required"], ["search_queries"]);
   assert.deepEqual(requestSchema("extract")["required"], ["urls"]);
-  const searchProperties = requestSchema("search")["properties"] as Record<string, unknown>;
+  const searchProperties: JsonObject = requestSchema("search")["properties"];
   assert.deepEqual(searchProperties["mode"], {
     default: "basic",
     enum: ["turbo", "basic", "advanced"],

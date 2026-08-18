@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 
 export const VERSION = readPackageVersion();
 
-const SEARCH_MODES = ["turbo", "basic", "advanced"];
-const OUTPUT_FORMATS = ["json", "text", "urls"];
-const ERROR_FORMATS = ["text", "json"];
+const SEARCH_MODES = ["turbo", "basic", "advanced"] as const;
+const OUTPUT_FORMATS = ["json", "text", "urls"] as const;
+const ERROR_FORMATS = ["text", "json"] as const;
 const DEFAULT_MAX_CHARS_TOTAL = 27_000;
 const DEFAULT_FULL_CONTENT_MAX_CHARS_PER_RESULT = 50_000;
 
@@ -20,6 +20,14 @@ export type CliErrorKind =
   | "partial"
   | "timeout"
   | "usage";
+
+export type JsonPrimitive = boolean | null | number | string;
+
+export type JsonValue = JsonObject | JsonPrimitive | JsonValue[];
+
+export type JsonObject = {
+  [key: string]: JsonValue;
+};
 
 export type CliCommand =
   | { kind: "help"; endpoint?: ApiEndpoint }
@@ -40,7 +48,7 @@ export type CliRunOptions = {
   failOnErrors: boolean;
   format: OutputFormat;
   outputPath: string | undefined;
-  request: Record<string, unknown>;
+  request: JsonObject;
   temporaryOutput: boolean;
   timeoutMs: number;
 };
@@ -52,17 +60,17 @@ type CliIo = {
 };
 
 type ParseState = {
-  advancedSettings: Record<string, unknown>;
+  advancedSettings: JsonObject;
   apiKey?: string;
   baseUrl?: string;
-  bodyBase?: Record<string, unknown>;
+  bodyBase?: JsonObject;
   compact: boolean | undefined;
   dryRun: boolean;
   endpoint: ApiEndpoint;
   excludeDomains: string[];
   failOnErrors: boolean;
   format: OutputFormat;
-  generated: Record<string, unknown>;
+  generated: JsonObject;
   includeDomains: string[];
   outputPath?: string;
   positional: string[];
@@ -72,7 +80,7 @@ type ParseState = {
   urls: string[];
 };
 
-const ERROR_EXIT_CODES: Record<CliErrorKind, number> = {
+const ERROR_EXIT_CODES = {
   api: 4,
   auth: 3,
   internal: 1,
@@ -81,17 +89,25 @@ const ERROR_EXIT_CODES: Record<CliErrorKind, number> = {
   partial: 6,
   timeout: 5,
   usage: 2,
-};
+} satisfies Record<CliErrorKind, number>;
 
 type CliErrorOptions = {
-  detail?: unknown;
+  detail?: JsonValue;
   kind?: CliErrorKind;
   refId?: string | undefined;
   status?: number | undefined;
 };
 
+type FormattedCliErrorDetail = {
+  kind: CliErrorKind;
+  message: string;
+  detail?: JsonValue;
+  ref_id?: string;
+  status?: number;
+};
+
 export class CliError extends Error {
-  detail: unknown;
+  detail: JsonValue | undefined;
   exitCode: number;
   kind: CliErrorKind;
   refId: string | undefined;
@@ -387,7 +403,7 @@ export function parseCli(
         );
         break;
       case "--format":
-        state.format = parseAllowed(readValue(), flag.name, OUTPUT_FORMATS) as OutputFormat;
+        state.format = parseAllowed(readValue(), flag.name, OUTPUT_FORMATS);
         break;
       case "--json":
         state.format = "json";
@@ -483,7 +499,7 @@ Run "parallel-search help search" or "parallel-search help extract" for command-
 `;
 }
 
-export async function apiJson(options: CliRunOptions): Promise<unknown> {
+export async function apiJson(options: CliRunOptions): Promise<JsonValue> {
   if (options.apiKey === undefined || options.apiKey.trim() === "") {
     throw new CliError("Missing API key. Set PARALLEL_API_KEY or pass --api-key.", {
       kind: "auth",
@@ -492,7 +508,11 @@ export async function apiJson(options: CliRunOptions): Promise<unknown> {
 
   const response = await postApi({ ...options, apiKey: options.apiKey });
   try {
-    return await response.json();
+    const value: unknown = await response.json();
+    if (!isJsonValue(value)) {
+      throw new Error("Response was not JSON data");
+    }
+    return value;
   } catch {
     throw new CliError(`API returned invalid JSON with status ${response.status}`, {
       kind: "api",
@@ -501,7 +521,15 @@ export async function apiJson(options: CliRunOptions): Promise<unknown> {
   }
 }
 
-export function requestPreview(options: CliRunOptions): Record<string, unknown> {
+export type RequestPreview = {
+  endpoint: ApiEndpoint;
+  method: "POST";
+  request: JsonObject;
+  timeout_ms: number;
+  url: string;
+};
+
+export function requestPreview(options: CliRunOptions): RequestPreview {
   return {
     endpoint: options.endpoint,
     method: "POST",
@@ -511,7 +539,11 @@ export function requestPreview(options: CliRunOptions): Record<string, unknown> 
   };
 }
 
-export function formatResponse(response: unknown, format: OutputFormat, compact: boolean): string {
+export function formatResponse(
+  response: JsonValue,
+  format: OutputFormat,
+  compact: boolean,
+): string {
   switch (format) {
     case "json": {
       const json = JSON.stringify(response, null, compact ? 0 : 2);
@@ -569,7 +601,7 @@ export function formatCliError(error: unknown, format: ErrorFormat): string {
       : `${cliError.message} (ref_id: ${cliError.refId})`;
   }
 
-  const detail: Record<string, unknown> = {
+  const detail: FormattedCliErrorDetail = {
     kind: cliError.kind,
     message: cliError.message,
   };
@@ -586,8 +618,8 @@ export function formatCliError(error: unknown, format: ErrorFormat): string {
   return JSON.stringify({ error: detail, type: "error" });
 }
 
-export function extractResponseErrors(response: unknown): unknown[] {
-  if (!isRecord(response) || !Array.isArray(response["errors"])) {
+export function extractResponseErrors(response: JsonValue): JsonValue[] {
+  if (!isJsonObject(response) || !Array.isArray(response["errors"])) {
     return [];
   }
 
@@ -800,23 +832,20 @@ function buildCommand(state: ParseState, env: Environment): CliCommand {
   };
 }
 
-function applyRequestDefaults(
-  endpoint: ApiEndpoint,
-  request: Record<string, unknown>,
-): Record<string, unknown> {
+function applyRequestDefaults(endpoint: ApiEndpoint, request: JsonObject): JsonObject {
   const withDefaults = mergeObjects(
     endpoint === "search"
       ? { max_chars_total: DEFAULT_MAX_CHARS_TOTAL, mode: "basic" }
       : { max_chars_total: DEFAULT_MAX_CHARS_TOTAL },
     request,
   );
-  if (endpoint !== "extract" || !isRecord(withDefaults["advanced_settings"])) {
+  if (endpoint !== "extract" || !isJsonObject(withDefaults["advanced_settings"])) {
     return withDefaults;
   }
 
   const advancedSettings = withDefaults["advanced_settings"];
   const fullContent = advancedSettings["full_content"];
-  if (fullContent !== true && !isRecord(fullContent)) {
+  if (fullContent !== true && !isJsonObject(fullContent)) {
     return withDefaults;
   }
 
@@ -830,7 +859,7 @@ function applyRequestDefaults(
   });
 }
 
-function validateRequest(endpoint: ApiEndpoint, request: Record<string, unknown>): void {
+function validateRequest(endpoint: ApiEndpoint, request: JsonObject): void {
   validateCommonRequest(request);
 
   if (endpoint === "search") {
@@ -840,7 +869,7 @@ function validateRequest(endpoint: ApiEndpoint, request: Record<string, unknown>
   }
 }
 
-function validateCommonRequest(request: Record<string, unknown>): void {
+function validateCommonRequest(request: JsonObject): void {
   if (request["objective"] !== undefined) {
     assertStringValue(request["objective"], "objective", { maxLength: 5000 });
   }
@@ -862,7 +891,7 @@ function validateCommonRequest(request: Record<string, unknown>): void {
   }
 
   if (request["advanced_settings"] !== undefined) {
-    if (!isRecord(request["advanced_settings"])) {
+    if (!isJsonObject(request["advanced_settings"])) {
       throw new CliError("advanced_settings must be an object");
     }
 
@@ -871,7 +900,7 @@ function validateCommonRequest(request: Record<string, unknown>): void {
   }
 }
 
-function validateSearchRequest(request: Record<string, unknown>): void {
+function validateSearchRequest(request: JsonObject): void {
   validateSearchQueries(request["search_queries"], true);
 
   if (request["mode"] !== undefined) {
@@ -882,7 +911,7 @@ function validateSearchRequest(request: Record<string, unknown>): void {
     return;
   }
 
-  if (!isRecord(request["advanced_settings"])) {
+  if (!isJsonObject(request["advanced_settings"])) {
     throw new CliError("advanced_settings must be an object");
   }
 
@@ -909,7 +938,7 @@ function validateSourcePolicy(value: unknown): void {
     return;
   }
 
-  if (!isRecord(value)) {
+  if (!isJsonObject(value)) {
     throw new CliError("advanced_settings.source_policy must be an object");
   }
 
@@ -985,23 +1014,23 @@ function assertRfc3339Date(value: unknown, field: string): void {
   }
 }
 
-function validateExtractRequest(request: Record<string, unknown>): void {
+function validateExtractRequest(request: JsonObject): void {
   validateUrls(request["urls"]);
 
   if (request["advanced_settings"] === undefined) {
     return;
   }
 
-  if (!isRecord(request["advanced_settings"])) {
+  if (!isJsonObject(request["advanced_settings"])) {
     throw new CliError("advanced_settings must be an object");
   }
 
   const fullContent = request["advanced_settings"]["full_content"];
-  if (fullContent === undefined || typeof fullContent === "boolean") {
+  if (fullContent === undefined || isBoolean(fullContent)) {
     return;
   }
 
-  if (!isRecord(fullContent)) {
+  if (!isJsonObject(fullContent)) {
     throw new CliError("advanced_settings.full_content must be a boolean or object");
   }
 
@@ -1062,7 +1091,7 @@ function validateFetchPolicy(value: unknown): void {
     return;
   }
 
-  if (!isRecord(value)) {
+  if (!isJsonObject(value)) {
     throw new CliError("advanced_settings.fetch_policy must be an object");
   }
 
@@ -1080,7 +1109,7 @@ function validateFetchPolicy(value: unknown): void {
 
   if (
     value["disable_cache_fallback"] !== undefined &&
-    typeof value["disable_cache_fallback"] !== "boolean"
+    !isBoolean(value["disable_cache_fallback"])
   ) {
     throw new CliError("advanced_settings.fetch_policy.disable_cache_fallback must be a boolean");
   }
@@ -1091,7 +1120,7 @@ function validateExcerptSettings(value: unknown): void {
     return;
   }
 
-  if (!isRecord(value)) {
+  if (!isJsonObject(value)) {
     throw new CliError("advanced_settings.excerpt_settings must be an object");
   }
 
@@ -1136,20 +1165,23 @@ async function postApi(options: CliRunOptions & { apiKey: string }): Promise<Res
 async function buildHttpError(response: Response): Promise<CliError> {
   const text = (await response.text()).trim();
   const statusLabel = `${response.status} ${response.statusText}`.trim();
-  let detail: unknown;
+  let detail: JsonValue | undefined;
   let message = statusLabel;
   let refId: string | undefined;
 
   if (text !== "") {
     try {
-      const parsed = JSON.parse(text) as unknown;
+      const parsed: unknown = JSON.parse(text);
+      if (!isJsonValue(parsed)) {
+        throw new Error("Response was not JSON data");
+      }
       detail = parsed;
-      if (isRecord(parsed)) {
+      if (isJsonObject(parsed)) {
         const nestedError = parsed["error"];
-        if (typeof nestedError === "string") {
+        if (isString(nestedError)) {
           message = `${statusLabel}: ${nestedError}`;
           detail = undefined;
-        } else if (isRecord(nestedError)) {
+        } else if (isJsonObject(nestedError)) {
           const nestedMessage = stringField(nestedError, "message");
           if (nestedMessage !== undefined) {
             message = `${statusLabel}: ${nestedMessage}`;
@@ -1169,15 +1201,20 @@ async function buildHttpError(response: Response): Promise<CliError> {
     }
   }
 
-  return new CliError(message, {
-    detail,
+  const options: CliErrorOptions = {
     kind: response.status === 401 ? "auth" : "api",
-    refId,
     status: response.status,
-  });
+  };
+  if (detail !== undefined) {
+    options.detail = detail;
+  }
+  if (refId !== undefined) {
+    options.refId = refId;
+  }
+  return new CliError(message, options);
 }
 
-function formatTextResponse(response: unknown): string {
+function formatTextResponse(response: JsonValue): string {
   const lines: string[] = [];
   const results = extractResults(response);
 
@@ -1197,7 +1234,7 @@ function formatTextResponse(response: unknown): string {
     if (Array.isArray(result["excerpts"]) && result["excerpts"].length > 0) {
       lines.push("   Excerpts:");
       for (const excerpt of result["excerpts"]) {
-        if (typeof excerpt === "string") {
+        if (isString(excerpt)) {
           lines.push(indentBlock(excerpt, "   - ", "     "));
         }
       }
@@ -1211,14 +1248,14 @@ function formatTextResponse(response: unknown): string {
     lines.push("");
   });
 
-  if (isRecord(response)) {
+  if (isJsonObject(response)) {
     appendResponseMetadata(response, lines);
   }
 
   return trimTrailingBlankLines(lines).join("\n");
 }
 
-function appendResponseMetadata(response: Record<string, unknown>, lines: string[]): void {
+function appendResponseMetadata(response: JsonObject, lines: string[]): void {
   const ids = ["search_id", "extract_id", "session_id"];
   for (const id of ids) {
     const value = stringField(response, id);
@@ -1240,16 +1277,16 @@ function appendResponseMetadata(response: Record<string, unknown>, lines: string
   }
 }
 
-function extractResults(response: unknown): Record<string, unknown>[] {
-  if (!isRecord(response) || !Array.isArray(response["results"])) {
+function extractResults(response: JsonValue): JsonObject[] {
+  if (!isJsonObject(response) || !Array.isArray(response["results"])) {
     return [];
   }
 
-  return response["results"].filter(isRecord);
+  return response["results"].filter(isJsonObject);
 }
 
-function formatContentValue(value: unknown): string {
-  if (typeof value === "string") {
+function formatContentValue(value: JsonValue): string {
+  if (isString(value)) {
     return value;
   }
 
@@ -1272,7 +1309,12 @@ function trimTrailingBlankLines(lines: string[]): string[] {
   return lines.slice(0, end);
 }
 
-function splitFlag(value: string): { name: string; inlineValue?: string } {
+type SplitFlag = {
+  name: string;
+  inlineValue?: string;
+};
+
+function splitFlag(value: string): SplitFlag {
   if (!value.startsWith("--")) {
     return { name: value };
   }
@@ -1296,13 +1338,9 @@ function ensureEndpoint(actual: ApiEndpoint, expected: ApiEndpoint, flag: string
 
 type StdinReader = (flag: string) => string;
 
-function parseJsonObject(
-  value: string,
-  flag: string,
-  readStdin: StdinReader,
-): Record<string, unknown> {
+function parseJsonObject(value: string, flag: string, readStdin: StdinReader): JsonObject {
   const parsed = parseJsonOrFile(value, flag, readStdin);
-  if (!isRecord(parsed)) {
+  if (!isJsonObject(parsed)) {
     throw new CliError(`${flag} must be a JSON object`);
   }
 
@@ -1315,11 +1353,15 @@ function parseJsonStringArray(value: string, flag: string, readStdin: StdinReade
   return parsed ?? [];
 }
 
-function parseJsonOrFile(value: string, flag: string, readStdin: StdinReader): unknown {
+function parseJsonOrFile(value: string, flag: string, readStdin: StdinReader): JsonValue {
   const source = value.startsWith("@") ? readJsonFile(value.slice(1), flag, readStdin) : value;
 
   try {
-    return JSON.parse(source) as unknown;
+    const parsed: unknown = JSON.parse(source);
+    if (!isJsonValue(parsed)) {
+      throw new Error("Input was not JSON data");
+    }
+    return parsed;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new CliError(`${flag} contains invalid JSON: ${reason}`);
@@ -1368,7 +1410,7 @@ function assertIntegerValue(
   field: string,
   bounds: { min?: number; max?: number },
 ): void {
-  if (typeof value !== "number" || !Number.isInteger(value)) {
+  if (!isNumber(value) || !Number.isInteger(value)) {
     throw new CliError(`${field} must be an integer`);
   }
 
@@ -1380,7 +1422,7 @@ function assertNumberValue(
   field: string,
   bounds: { min?: number; minExclusive?: number; max?: number },
 ): void {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (!isNumber(value) || !Number.isFinite(value)) {
     throw new CliError(`${field} must be a number`);
   }
 
@@ -1397,16 +1439,21 @@ function assertNumberValue(
   }
 }
 
-function parseAllowed(value: string, flag: string, allowed: readonly string[]): string {
-  if (!allowed.includes(value)) {
-    throw new CliError(`${flag} must be one of: ${allowed.join(", ")}`);
+function parseAllowed<const Values extends readonly string[]>(
+  value: string,
+  flag: string,
+  allowed: Values,
+): Values[number] {
+  for (const candidate of allowed) {
+    if (candidate === value) {
+      return candidate;
+    }
   }
-
-  return value;
+  throw new CliError(`${flag} must be one of: ${allowed.join(", ")}`);
 }
 
 function assertAllowedValue(value: unknown, field: string, allowed: readonly string[]): void {
-  if (typeof value !== "string" || !allowed.includes(value)) {
+  if (!isString(value) || !allowed.includes(value)) {
     throw new CliError(`${field} must be one of: ${allowed.join(", ")}`);
   }
 }
@@ -1456,23 +1503,18 @@ function validateStringArray(value: unknown, field: string): asserts value is st
     return;
   }
 
-  if (
-    !Array.isArray(value) ||
-    value.some((entry) => typeof entry !== "string" || entry.trim() === "")
-  ) {
+  if (!Array.isArray(value) || value.some((entry) => !isNonEmptyString(entry))) {
     throw new CliError(`${field} must be an array of non-empty strings`);
   }
 }
 
-function mergeObjects(
-  base: Record<string, unknown>,
-  override: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = { ...base };
+function mergeObjects(base: JsonObject, override: JsonObject) {
+  const merged: JsonObject = {};
+  Object.assign(merged, base);
 
   for (const [key, value] of Object.entries(override)) {
     const baseValue = merged[key];
-    if (isRecord(baseValue) && isRecord(value)) {
+    if (isJsonObject(baseValue) && isJsonObject(value)) {
       merged[key] = mergeObjects(baseValue, value);
     } else {
       merged[key] = value;
@@ -1482,28 +1524,54 @@ function mergeObjects(
   return merged;
 }
 
-function getRecord(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
+function getRecord(value: JsonValue | undefined) {
+  return isJsonObject(value) ? value : {};
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+export function isBoolean(value: unknown): value is boolean {
+  return typeof value === "boolean";
+}
+
+export function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
+export function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+export function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null || isBoolean(value) || isNumber(value) || isString(value)) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  return typeof value === "object" && Object.values(value).every(isJsonValue);
+}
+
+export function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && isJsonValue(value) && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return isString(value) && value.trim() !== "";
 }
 
 function readPackageVersion(): string {
   const packageJson: unknown = JSON.parse(
     readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   );
-  if (!isRecord(packageJson) || typeof packageJson["version"] !== "string") {
+  if (!isJsonObject(packageJson) || !isString(packageJson["version"])) {
     throw new Error("package.json must include a string version");
   }
 
   return packageJson["version"];
 }
 
-function stringField(record: Record<string, unknown>, field: string): string | undefined {
+function stringField(record: JsonObject, field: string): string | undefined {
   const value = record[field];
-  return typeof value === "string" && value !== "" ? value : undefined;
+  return isString(value) && value !== "" ? value : undefined;
 }
 
 function apiUrl(baseUrl: string, endpoint: ApiEndpoint): string {

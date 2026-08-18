@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { isJsonObject } from "../src/core.ts";
+
 void test("packages an agent skill with bounded and safe CLI guidance", () => {
   const packageJson: unknown = JSON.parse(readFileSync("package.json", "utf8"));
-  assert.ok(isRecord(packageJson));
+  assert.ok(isJsonObject(packageJson));
   assert.ok(Array.isArray(packageJson["files"]));
   assert.ok(packageJson["files"].includes("skills"));
 
@@ -18,7 +20,3 @@ void test("packages an agent skill with bounded and safe CLI guidance", () => {
   assert.match(skill, /untrusted data/);
   assert.match(skill, /never expose `PARALLEL_API_KEY`/);
 });
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}

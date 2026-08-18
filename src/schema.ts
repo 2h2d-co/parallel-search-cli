@@ -1,4 +1,4 @@
-import type { ApiEndpoint } from "./core.ts";
+import type { ApiEndpoint, JsonObject } from "./core.ts";
 
 const searchQueries = {
   description: "Concise keyword queries. Provide 2-3 diverse queries of roughly 3-6 words.",
@@ -98,7 +98,7 @@ const searchSchema = {
   required: ["search_queries"],
   title: "Parallel Search request",
   type: "object",
-};
+} satisfies JsonObject;
 
 const extractSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -136,8 +136,8 @@ const extractSchema = {
   required: ["urls"],
   title: "Parallel Extract request",
   type: "object",
-};
+} satisfies JsonObject;
 
-export function requestSchema(endpoint: ApiEndpoint): Record<string, unknown> {
+export function requestSchema(endpoint: ApiEndpoint) {
   return endpoint === "search" ? searchSchema : extractSchema;
 }
