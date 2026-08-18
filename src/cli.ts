@@ -63,6 +63,7 @@ async function main(): Promise<void> {
         { detail: extractErrors, kind: "partial" },
       );
     }
+    // oxlint-disable-next-line 2h2d/no-silent-error-suppression -- The CLI boundary renders failures and converts them to process exit codes.
   } catch (error) {
     const cliError =
       error instanceof CliError

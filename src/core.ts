@@ -92,6 +92,7 @@ const ERROR_EXIT_CODES = {
 } satisfies Record<CliErrorKind, number>;
 
 type CliErrorOptions = {
+  cause?: unknown;
   detail?: JsonValue;
   kind?: CliErrorKind;
   refId?: string | undefined;
@@ -114,7 +115,7 @@ export class CliError extends Error {
   status: number | undefined;
 
   constructor(message: string, options: CliErrorOptions = {}) {
-    super(message);
+    super(message, { cause: options.cause });
     this.name = "CliError";
     this.detail = options.detail;
     this.kind = options.kind ?? "usage";
@@ -513,8 +514,9 @@ export async function apiJson(options: CliRunOptions): Promise<JsonValue> {
       throw new Error("Response was not JSON data");
     }
     return value;
-  } catch {
+  } catch (error) {
     throw new CliError(`API returned invalid JSON with status ${response.status}`, {
+      cause: error,
       kind: "api",
       status: response.status,
     });
@@ -809,8 +811,8 @@ function buildCommand(state: ParseState, env: Environment): CliCommand {
   const baseUrl = state.baseUrl ?? env["PARALLEL_BASE_URL"] ?? "https://api.parallel.ai/v1";
   try {
     apiUrl(baseUrl, state.endpoint);
-  } catch {
-    throw new CliError("--base-url must be a valid URL");
+  } catch (error) {
+    throw new CliError("--base-url must be a valid URL", { cause: error });
   }
 
   return {
@@ -1195,7 +1197,10 @@ async function buildHttpError(response: Response): Promise<CliError> {
           detail = parsed["errors"];
         }
       }
-    } catch {
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw error;
+      }
       message = `${statusLabel}: ${text}`;
       detail = text;
     }
