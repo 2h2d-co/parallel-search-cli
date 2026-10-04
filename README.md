@@ -212,10 +212,8 @@ Run `parallel-search --help`, `parallel-search help search`, or `parallel-search
 
 ```bash
 mise install
-npm install
-npm run check
-npm test
-npm run pack:dry
+mise run init
+mise run check
 ```
 
 `npm test` combines fast source-level tests with black-box package tests. The package tests copy the publishable sources into a temporary directory, compile them, create an npm tarball, unpack it, and invoke its declared `parallel-search` binary directly. This catches packaging and compiled-runtime failures that source-only tests cannot detect without making API requests.
